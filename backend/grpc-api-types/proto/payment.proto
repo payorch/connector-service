@@ -3,66 +3,671 @@ syntax = "proto3";
 package ucas.payment;
 
 service PaymentService {
-  rpc CreatePayment(PaymentsCreateRequest) returns (PaymentsResponse);
-  rpc UpdatePayment(PaymentsUpdateRequest) returns (PaymentsResponse);
-  rpc RetrievePayment(PaymentRetrieveRequest) returns (PaymentsResponse);
-  rpc ConfirmPayment(PaymentsConfirmRequest) returns (PaymentsResponse);
-  rpc CapturePayment(PaymentsCaptureRequest) returns (PaymentsResponse);
-  rpc CancelPayment(PaymentsCancelRequest) returns (PaymentsResponse);
-  rpc ListPayments(PaymentsListRequest) returns (stream PaymentListResponse);
-  rpc IncrementalAuthorization(PaymentsIncrementalAuthorizationRequest) returns (PaymentsResponse);
-  rpc CreateSessionToken(PaymentsSessionRequest) returns (PaymentsSessionResponse);
+  rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
+  rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
 }
 
-message PaymentsCreateRequest {
-  // TODO: Fill in fields
+message PaymentsAuthorizeRequest {
+  int64 amount = 10;
+  Currency currency = 15;
+  Connector connector = 35;
+  AuthType auth_creds = 34;
+  PaymentMethod payment_method = 2;
+  PaymentMethodData payment_method_data = 14;
+  optional string connector_customer = 1;
+  PaymentAddress address = 3;
+  AuthenticationType auth_type = 4;
+  optional bytes connector_meta_data = 5;
+  optional AccessToken access_token = 6;
+  optional string session_token = 7;
+  optional PaymentMethodToken payment_method_token = 8;
+  string connector_request_reference_id = 9;
+  optional int64 order_tax_amount = 11;
+  optional string email = 12;
+  optional string customer_name = 13;
+  optional CaptureMethod capture_method = 16;
+  optional string return_url = 17;
+  optional string webhook_url = 18;
+  optional string complete_authorize_url = 19;
+  optional FutureUsage setup_future_usage = 20;
+  optional bool off_session = 21;
+  optional CustomerAcceptance customer_acceptance = 22;
+  optional BrowserInformation browser_info = 23;
+  optional string order_category = 24;
+  bool enrolled_for_3ds = 25;
+  optional PaymentExperience payment_experience = 26;
+  optional PaymentMethodType payment_method_type = 27;
+  bool request_incremental_authorization = 28;
+  optional AuthenticationData authentication_data = 29;
+  optional bool request_extended_authorization = 30;
+  int64 minor_amount = 31;
+  optional string merchant_order_reference_id = 32;
+  optional int64 shipping_cost = 33;
 }
 
-message PaymentsUpdateRequest {
-  string payment_id = 1;
-  // TODO: Fill in fields
+message PaymentsAuthorizeResponse {
+  ResponseId resource_id = 1;
+  optional RedirectForm redirection_data = 2;
+  optional bytes connector_metadata = 3; // Using bytes for serde_json::Value
+  optional MandateReference mandate_reference = 4;
+  optional string network_txn_id = 5;
+  optional string connector_response_reference_id = 6;
+  optional bool incremental_authorization_allowed = 7;
+  AttemptStatus status = 8;
 }
 
-message PaymentRetrieveRequest {
-  string payment_id = 1;
+message PaymentsSyncRequest {
+  string resource_id = 1;
+  optional string connector_request_reference_id = 2;
+  
 }
 
-message PaymentsConfirmRequest {
-  string payment_id = 1;
-  // TODO: Fill in fields
+message PaymentsSyncResponse {
+  ResponseId resource_id = 1;
+  AttemptStatus status = 2;
+  optional MandateReference mandate_reference = 3;
+  optional string network_txn_id = 4;
+  optional string connector_response_reference_id = 5;
 }
 
-message PaymentsCaptureRequest {
-  string payment_id = 1;
-  // TODO: Fill in fields
+// Add these new message and enum types
+message AuthType {
+  oneof auth_details {
+    HeaderKey header_key = 1;
+    BodyKey body_key = 2;
+    SignatureKey signature_key = 3;
+    MultiAuthKey multi_auth_key = 4;
+    CertificateAuth certificate_auth = 5;
+    bool no_key = 6; // Using bool as a presence indicator for NoKey
+  }
 }
 
-message PaymentsCancelRequest {
-  string payment_id = 1;
-  // TODO: Fill in fields
+message HeaderKey {
+  string api_key = 1;
 }
 
-message PaymentsListRequest {
-  // TODO: Fill in fields
+message BodyKey {
+  string api_key = 1;
+  string key1 = 2;
 }
 
-message PaymentsIncrementalAuthorizationRequest {
-  string payment_id = 1;
-  // TODO: Fill in fields
+message SignatureKey {
+  string api_key = 1;
+  string key1 = 2;
+  string api_secret = 3;
 }
 
-message PaymentsSessionRequest {
-  // TODO: Fill in fields
+message MultiAuthKey {
+  string api_key = 1;
+  string key1 = 2;
+  string api_secret = 3;
+  string key2 = 4;
 }
 
-message PaymentsResponse {
-  // TODO: Fill in fields
+message CertificateAuth {
+  string certificate = 1;
+  string private_key = 2;
 }
 
-message PaymentListResponse {
-  // TODO: Fill in fields
+enum Connector {
+  ADYENPLATFORM = 0;
+  ACI = 1;
+  ADYEN = 2;
+  AIRWALLEX = 3;
+  AUTHORIZEDOTNET = 4;
+  BAMBORA = 5;
+  BAMBORAAPAC = 6;
+  BANKOFAMERICA = 7;
+  BILLWERK = 8;
+  BITPAY = 9;
+  BLUESNAP = 10;
+  BOKU = 11;
+  BRAINTREE = 12;
+  CASHTOCODE = 13;
+  CHARGEBEE = 14;
+  CHECKOUT = 15;
+  COINBASE = 16;
+  COINGATE = 17;
+  CRYPTOPAY = 18;
+  CTP_MASTERCARD = 19;
+  CTP_VISA = 20;
+  CYBERSOURCE = 21;
+  DATATRANS = 22;
+  DEUTSCHEBANK = 23;
+  DIGITALVIRGO = 24;
+  DLOCAL = 25;
+  EBANX = 26;
+  ELAVON = 27;
+  FISERV = 28;
+  FISERVEMEA = 29;
+  FIUU = 30;
+  FORTE = 31;
+  GETNET = 32;
+  GLOBALPAY = 33;
+  GLOBEPAY = 34;
+  GOCARDLESS = 35;
+  GPAYMENTS = 36;
+  HIPAY = 37;
+  HELCIM = 38;
+  INESPAY = 39;
+  IATAPAY = 40;
+  ITAUBANK = 41;
+  JPMORGAN = 42;
+  JUSPAYTHREEDSSERVER = 43;
+  KLARNA = 44;
+  MIFINITY = 45;
+  MOLLIE = 46;
+  MONERIS = 47;
+  MULTISAFEPAY = 48;
+  NETCETERA = 49;
+  NEXINETS = 50;
+  NEXIXPAY = 51;
+  NMI = 52;
+  NOMUPAY = 53;
+  NOON = 54;
+  NOVALNET = 55;
+  NUVEI = 56;
+  OPENNODE = 57;
+  PAYBOX = 58;
+  PAYME = 59;
+  PAYONE = 60;
+  PAYPAL = 61;
+  PAYSTACK = 62;
+  PAYU = 63;
+  PLACETOPAY = 64;
+  POWERTRANZ = 65;
+  PROPHETPAY = 66;
+  RAPYD = 67;
+  RAZORPAY = 68;
+  RECURLY = 69;
+  REDSYS = 70;
+  SHIFT4 = 71;
+  SQUARE = 72;
+  STAX = 73;
+  STRIPE = 74;
+  TAXJAR = 75;
+  THREEDSECUREIO = 76;
+  TRUSTPAY = 77;
+  TSYS = 78;
+  VOLT = 79;
+  WELLSFARGO = 80;
+  WISE = 81;
+  WORLDLINE = 82;
+  WORLDPAY = 83;
+  SIGNIFYD = 84;
+  PLAID = 85;
+  RISKIFIED = 86;
+  XENDIT = 87;
+  ZEN = 88;
+  ZSL = 89;
 }
 
-message PaymentsSessionResponse {
-  // TODO: Fill in fields
+message ResponseId {
+  oneof id {
+    string connector_transaction_id = 1;
+    string encoded_data = 2;
+    bool no_response_id = 3; // Using bool as a presence indicator for NoResponseId
+  }
+}
+
+message RedirectForm {
+  oneof form_type {
+    FormData form = 1;
+    HtmlData html = 2;
+  }
+}
+
+message FormData {
+  string endpoint = 1;
+  Method method = 2;
+  map<string, string> form_fields = 3;
+}
+
+message HtmlData {
+  string html_data = 1;
+}
+
+enum Method {
+  GET = 0;
+  POST = 1;
+  // Add other HTTP methods as needed
+}
+
+message MandateReference {
+  optional string connector_mandate_id = 1;
+}
+
+enum Currency {
+  AED = 0;
+  AFN = 1;
+  ALL = 2;
+  AMD = 3;
+  ANG = 4;
+  AOA = 5;
+  ARS = 6;
+  AUD = 7;
+  AWG = 8;
+  AZN = 9;
+  BAM = 10;
+  BBD = 11;
+  BDT = 12;
+  BGN = 13;
+  BHD = 14;
+  BIF = 15;
+  BMD = 16;
+  BND = 17;
+  BOB = 18;
+  BRL = 19;
+  BSD = 20;
+  BTN = 21;
+  BWP = 22;
+  BYN = 23;
+  BZD = 24;
+  CAD = 25;
+  CDF = 26;
+  CHF = 27;
+  CLF = 28;
+  CLP = 29;
+  CNY = 30;
+  COP = 31;
+  CRC = 32;
+  CUC = 33;
+  CUP = 34;
+  CVE = 35;
+  CZK = 36;
+  DJF = 37;
+  DKK = 38;
+  DOP = 39;
+  DZD = 40;
+  EGP = 41;
+  ERN = 42;
+  ETB = 43;
+  EUR = 44;
+  FJD = 45;
+  FKP = 46;
+  GBP = 47;
+  GEL = 48;
+  GHS = 49;
+  GIP = 50;
+  GMD = 51;
+  GNF = 52;
+  GTQ = 53;
+  GYD = 54;
+  HKD = 55;
+  HNL = 56;
+  HRK = 57;
+  HTG = 58;
+  HUF = 59;
+  IDR = 60;
+  ILS = 61;
+  INR = 62;
+  IQD = 63;
+  IRR = 64;
+  ISK = 65;
+  JMD = 66;
+  JOD = 67;
+  JPY = 68;
+  KES = 69;
+  KGS = 70;
+  KHR = 71;
+  KMF = 72;
+  KPW = 73;
+  KRW = 74;
+  KWD = 75;
+  KYD = 76;
+  KZT = 77;
+  LAK = 78;
+  LBP = 79;
+  LKR = 80;
+  LRD = 81;
+  LSL = 82;
+  LYD = 83;
+  MAD = 84;
+  MDL = 85;
+  MGA = 86;
+  MKD = 87;
+  MMK = 88;
+  MNT = 89;
+  MOP = 90;
+  MRU = 91;
+  MUR = 92;
+  MVR = 93;
+  MWK = 94;
+  MXN = 95;
+  MYR = 96;
+  MZN = 97;
+  NAD = 98;
+  NGN = 99;
+  NIO = 100;
+  NOK = 101;
+  NPR = 102;
+  NZD = 103;
+  OMR = 104;
+  PAB = 105;
+  PEN = 106;
+  PGK = 107;
+  PHP = 108;
+  PKR = 109;
+  PLN = 110;
+  PYG = 111;
+  QAR = 112;
+  RON = 113;
+  RSD = 114;
+  RUB = 115;
+  RWF = 116;
+  SAR = 117;
+  SBD = 118;
+  SCR = 119;
+  SDG = 120;
+  SEK = 121;
+  SGD = 122;
+  SHP = 123;
+  SLE = 124;
+  SLL = 125;
+  SOS = 126;
+  SRD = 127;
+  SSP = 128;
+  STD = 129;
+  STN = 130;
+  SVC = 131;
+  SYP = 132;
+  SZL = 133;
+  THB = 134;
+  TJS = 135;
+  TMT = 136;
+  TND = 137;
+  TOP = 138;
+  TRY = 139;
+  TTD = 140;
+  TWD = 141;
+  TZS = 142;
+  UAH = 143;
+  UGX = 144;
+  USD = 145;
+  UYU = 146;
+  UZS = 147;
+  VES = 148;
+  VND = 149;
+  VUV = 150;
+  WST = 151;
+  XAF = 152;
+  XCD = 153;
+  XOF = 154;
+  XPF = 155;
+  YER = 156;
+  ZAR = 157;
+  ZMW = 158;
+  ZWL = 159;
+}
+
+enum CaptureMethod {
+  AUTOMATIC = 0;
+  MANUAL = 1;
+  MANUAL_MULTIPLE = 2;
+  SCHEDULED = 3;
+  SEQUENTIAL_AUTOMATIC = 4;
+}
+
+enum FutureUsage {
+  OFF_SESSION = 0;
+  ON_SESSION = 1;
+}
+
+message CustomerAcceptance {
+  AcceptanceType acceptance_type = 1;
+  string accepted_at = 2; // ISO8601 formatted string
+  optional OnlineMandate online = 3;
+}
+
+enum AcceptanceType {
+  ONLINE = 0;
+  OFFLINE = 1;
+}
+
+message BrowserInformation {
+  optional uint32 color_depth = 1;
+  optional bool java_enabled = 2;
+  optional bool java_script_enabled = 3;
+  optional string language = 4;
+  optional uint32 screen_height = 5;
+  optional uint32 screen_width = 6;
+  optional int32 time_zone = 7;
+  optional string ip_address = 8; // Using string for IP address
+  optional string accept_header = 9;
+  optional string user_agent = 10;
+  optional string os_type = 11;
+  optional string os_version = 12;
+  optional string device_model = 13;
+  optional string accept_language = 14;
+}
+
+enum PaymentExperience {
+  REDIRECT_TO_URL = 0;
+  INVOKE_SDK_CLIENT = 1;
+  DISPLAY_QR_CODE = 2;
+  ONE_CLICK = 3;
+  LINK_WALLET = 4;
+  INVOKE_PAYMENT_APP = 5;
+  DISPLAY_WAIT_SCREEN = 6;
+  COLLECT_OTP = 7;
+}
+
+enum PaymentMethodType {
+  ACH = 0;
+  AFFIRM = 1;
+  AFTERPAY_CLEARPAY = 2;
+  ALFAMART = 3;
+  ALI_PAY = 4;
+  ALI_PAY_HK = 5;
+  ALMA = 6;
+  AMAZON_PAY = 7;
+  APPLE_PAY = 8;
+  ATOME = 9;
+  BACS = 10;
+  BANCONTACT_CARD = 11;
+  BECS = 12;
+  BENEFIT = 13;
+  BIZUM = 14;
+  BLIK = 15;
+  BOLETO = 16;
+  BCA_BANK_TRANSFER = 17;
+  BNI_VA = 18;
+  BRI_VA = 19;
+  CARD_REDIRECT = 20;
+  CIMB_VA = 21;
+  CLASSIC_REWARD = 22;
+  CREDIT = 23;
+  CRYPTO_CURRENCY = 24;
+  CASHAPP = 25;
+  DANA = 26;
+  DANAMON_VA = 27;
+  DEBIT = 28;
+  DUIT_NOW = 29;
+  EFECTY = 30;
+  EFT = 31;
+  EPS = 32;
+  FPS = 33;
+  EVOUCHER = 34;
+  GIROPAY = 35;
+  GIVEX = 36;
+  GOOGLE_PAY = 37;
+  GO_PAY = 38;
+  GCASH = 39;
+  IDEAL = 40;
+  INTERAC = 41;
+  INDOMARET = 42;
+  KAKAO_PAY = 44;
+  LOCAL_BANK_REDIRECT = 45;
+  MANDIRI_VA = 46;
+  KNET = 47;
+  MB_WAY = 48;
+  MOBILE_PAY = 49;
+  MOMO = 50;
+  MOMO_ATM = 51;
+  MULTIBANCO = 52;
+  ONLINE_BANKING_THAILAND = 53;
+  ONLINE_BANKING_CZECH_REPUBLIC = 54;
+  ONLINE_BANKING_FINLAND = 55;
+  ONLINE_BANKING_FPX = 56;
+  ONLINE_BANKING_POLAND = 57;
+  ONLINE_BANKING_SLOVAKIA = 58;
+  OXXO = 59;
+  PAGO_EFECTIVO = 60;
+  PERMATA_BANK_TRANSFER = 61;
+  OPEN_BANKING_UK = 62;
+  PAY_BRIGHT = 63;
+  PAZE = 65;
+  PIX = 66;
+  PAY_SAFE_CARD = 67;
+  PRZELEWY24 = 68;
+  PROMPT_PAY = 69;
+  PSE = 70;
+  RED_COMPRA = 71;
+  RED_PAGOS = 72;
+  SAMSUNG_PAY = 73;
+  SEPA = 74;
+  SEPA_BANK_TRANSFER = 75;
+  SOFORT = 76;
+  SWISH = 77;
+  TOUCH_N_GO = 78;
+  TRUSTLY = 79;
+  TWINT = 80;
+  UPI_COLLECT = 81;
+  UPI_INTENT = 82;
+  VIPPS = 83;
+  VIET_QR = 84;
+  VENMO = 85;
+  WALLEY = 86;
+  WE_CHAT_PAY = 87;
+  SEVEN_ELEVEN = 88;
+  LAWSON = 89;
+  MINI_STOP = 90;
+  FAMILY_MART = 91;
+  SEICOMART = 92;
+  PAY_EASY = 93;
+  LOCAL_BANK_TRANSFER = 94;
+  OPEN_BANKING_PIS = 96;
+  DIRECT_CARRIER_BILLING = 97;
+  INSTANT_BANK_TRANSFER = 98;
+}
+
+message PaymentMethodData {
+  oneof data {
+    Card card = 1;
+  }
+}
+
+message Card {
+  string card_number = 1;
+  string card_exp_month = 2;
+  string card_exp_year = 3;
+  optional string card_holder_name = 4;
+  string card_cvc = 5;
+  optional string card_issuer = 6;
+  optional CardNetwork card_network = 7;
+  optional string card_type = 8;
+  optional string card_issuing_country = 9;
+  optional string bank_code = 10;
+  optional string nick_name = 11;
+}
+
+enum CardNetwork {
+  VISA = 0;
+  MASTERCARD = 1;
+  AMERICAN_EXPRESS = 2;
+  JCB = 3;
+  DINERS_CLUB = 4;
+  DISCOVER = 5;
+  CARTES_BANCAIRES = 6;
+  UNION_PAY = 7;
+  RU_PAY = 8;
+  MAESTRO = 9;
+}
+
+message OnlineMandate {
+  optional string ip_address = 1;
+  string user_agent = 2;
+}
+
+enum AuthenticationType {
+  THREE_DS = 0;
+  NO_THREE_DS = 1;
+}
+
+message PhoneDetails {
+  optional string number = 1;
+  optional string country_code = 2;
+}
+
+message AuthenticationData {
+  optional string eci = 1;
+  string cavv = 2;
+  optional string threeds_server_transaction_id = 3;
+  optional string message_version = 4; // Using string for SemanticVersion
+  optional string ds_trans_id = 5;
+}
+
+enum PaymentMethod {
+  CARD = 0;
+}
+
+message PaymentAddress {
+  optional Address shipping = 1;
+  optional Address billing = 2;
+  optional Address unified_payment_method_billing = 3;
+  optional Address payment_method_billing = 4;
+}
+
+message Address {
+  optional AddressDetails address = 1;
+  optional PhoneDetails phone = 2;
+  optional string email = 3; // Using string for Email
+}
+
+message AddressDetails {
+  optional string city = 1;
+  optional string country = 2; // Using string for CountryAlpha2
+  optional string line1 = 3;
+  optional string line2 = 4;
+  optional string line3 = 5;
+  optional string zip = 6;
+  optional string state = 7;
+  optional string first_name = 8;
+  optional string last_name = 9;
+}
+
+message AccessToken {
+  string token = 1;
+  int64 expires = 2;
+}
+
+message PaymentMethodToken {
+  string token = 1;
+}
+
+enum AttemptStatus {
+  STARTED = 0;
+  AUTHENTICATION_FAILED = 1;
+  ROUTER_DECLINED = 2;
+  AUTHENTICATION_PENDING = 3;
+  AUTHENTICATION_SUCCESSFUL = 4;
+  AUTHORIZED = 5;
+  AUTHORIZATION_FAILED = 6;
+  CHARGED = 7;
+  AUTHORIZING = 8;
+  COD_INITIATED = 9;
+  VOIDED = 10;
+  VOID_INITIATED = 11;
+  CAPTURE_INITIATED = 12;
+  CAPTURE_FAILED = 13;
+  VOID_FAILED = 14;
+  AUTO_REFUNDED = 15;
+  PARTIAL_CHARGED = 16;
+  PARTIAL_CHARGED_AND_CHARGEABLE = 17;
+  UNRESOLVED = 18;
+  PENDING = 19;
+  FAILURE = 20;
+  PAYMENT_METHOD_AWAITED = 21;
+  CONFIRMATION_AWAITED = 22;
+  DEVICE_DATA_COLLECTION_PENDING = 23;
 }
