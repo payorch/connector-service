@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package ucas.payment;
+
+service PaymentService {
+  rpc CreatePayment(PaymentsCreateRequest) returns (PaymentsResponse);
+  rpc UpdatePayment(PaymentsUpdateRequest) returns (PaymentsResponse);
+  rpc RetrievePayment(PaymentRetrieveRequest) returns (PaymentsResponse);
+  rpc ConfirmPayment(PaymentsConfirmRequest) returns (PaymentsResponse);
+  rpc CapturePayment(PaymentsCaptureRequest) returns (PaymentsResponse);
+  rpc CancelPayment(PaymentsCancelRequest) returns (PaymentsResponse);
+  rpc ListPayments(PaymentsListRequest) returns (stream PaymentListResponse);
+  rpc IncrementalAuthorization(PaymentsIncrementalAuthorizationRequest) returns (PaymentsResponse);
+  rpc CreateSessionToken(PaymentsSessionRequest) returns (PaymentsSessionResponse);
+}
+
+message PaymentsCreateRequest {
+  // TODO: Fill in fields
+}
+
+message PaymentsUpdateRequest {
+  string payment_id = 1;
+  // TODO: Fill in fields
+}
+
+message PaymentRetrieveRequest {
+  string payment_id = 1;
+}
+
+message PaymentsConfirmRequest {
+  string payment_id = 1;
+  // TODO: Fill in fields
+}
+
+message PaymentsCaptureRequest {
+  string payment_id = 1;
+  // TODO: Fill in fields
+}
+
+message PaymentsCancelRequest {
+  string payment_id = 1;
+  // TODO: Fill in fields
+}
+
+message PaymentsListRequest {
+  // TODO: Fill in fields
+}
+
+message PaymentsIncrementalAuthorizationRequest {
+  string payment_id = 1;
+  // TODO: Fill in fields
+}
+
+message PaymentsSessionRequest {
+  // TODO: Fill in fields
+}
+
+message PaymentsResponse {
+  // TODO: Fill in fields
+}
+
+message PaymentListResponse {
+  // TODO: Fill in fields
+}
+
+message PaymentsSessionResponse {
+  // TODO: Fill in fields
+}

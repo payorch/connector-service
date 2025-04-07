@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package ucas.payment_method;
+
+
+
+service PaymentMethodService {
+  rpc CreatePaymentMethod(PaymentMethodCreateRequest) returns (PaymentMethodResponse);
+  rpc ListMerchantPaymentMethods(ListMerchantPaymentMethodsRequest) returns (PaymentMethodListResponse);
+  rpc ListCustomerPaymentMethods(ListCustomerPaymentMethodsRequest) returns (CustomerPaymentMethodsListResponse);
+  rpc ListCustomerPaymentMethodsForPayment(ListCustomerPaymentMethodsForPaymentRequest) returns (CustomerPaymentMethodsListResponse);
+  rpc SetDefaultPaymentMethod(SetDefaultPaymentMethodRequest) returns (CustomerDefaultPaymentMethodResponse);
+  rpc RetrievePaymentMethod(RetrievePaymentMethodRequest) returns (PaymentMethodResponse);
+  rpc DeletePaymentMethod(DeletePaymentMethodRequest) returns (PaymentMethodDeleteResponse);
+  rpc UpdatePaymentMethod(UpdatePaymentMethodRequest) returns (PaymentMethodResponse);
+}
+
+message PaymentMethodCreateRequest {
+  // TODO: Fill in fields
+}
+
+message ListMerchantPaymentMethodsRequest {
+  string account_id = 1;
+  // TODO: Fill in fields
+}
+
+message ListCustomerPaymentMethodsRequest {
+  string customer_id = 1;
+  // TODO: Fill in fields
+}
+
+message ListCustomerPaymentMethodsForPaymentRequest {
+  string client_secret = 1;
+  string customer_id = 2;
+  // TODO: Fill in fields
+}
+
+message SetDefaultPaymentMethodRequest {
+  string customer_id = 1;
+  string payment_method_id = 2;
+}
+
+message RetrievePaymentMethodRequest {
+  string method_id = 1;
+}
+
+message DeletePaymentMethodRequest {
+  string method_id = 1;
+}
+
+message UpdatePaymentMethodRequest {
+  string method_id = 1;
+  // TODO: Fill in fields
+}
+
+message PaymentMethodResponse {
+  // TODO: Fill in fields
+}
+
+message PaymentMethodListResponse {
+  // TODO: Fill in fields
+}
+
+message CustomerPaymentMethodsListResponse {
+  // TODO: Fill in fields
+}
+
+message CustomerDefaultPaymentMethodResponse {
+  // TODO: Fill in fields
+}
+
+message PaymentMethodDeleteResponse {
+  // TODO: Fill in fields
+}
