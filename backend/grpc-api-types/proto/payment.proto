@@ -57,9 +57,10 @@ message PaymentsAuthorizeResponse {
 }
 
 message PaymentsSyncRequest {
+  Connector connector = 35;
+  AuthType auth_creds = 34;
   string resource_id = 1;
   optional string connector_request_reference_id = 2;
-  
 }
 
 message PaymentsSyncResponse {
