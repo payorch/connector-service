@@ -9,8 +9,8 @@ use hyperswitch_common_utils::{
 // use error_stack::{report, ResultExt};
 use hyperswitch_domain_models::{
     // network_tokenization::NetworkTokenNumber,
-    payment_method_data::PaymentMethodData,
-    router_data::RouterData,
+    payment_method_data::{Card, PaymentMethodData},
+    router_data::{ConnectorAuthType, RouterData},
     router_request_types::ResponseId,
     router_response_types::PaymentsResponseData,
     types::{
@@ -42,8 +42,15 @@ use serde::{Deserialize, Serialize};
 // };
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub enum Currency {
+    #[default]
+    USD,
+    EUR,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Amount {
-    pub currency: storage_enums::Currency,
+    pub currency: enums::Currency,
     pub value: MinorUnit,
 }
 
@@ -85,6 +92,13 @@ pub enum CardBrand {
     Visaalphabankbonus,
     Visadankort,
     Warehouse,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ConnectorError {
+    ParsingFailed,
+    NotImplemented,
+    FailedToObtainAuthType,
 }
 
 #[serde_with::skip_serializing_none]
@@ -149,7 +163,7 @@ pub enum PaymentMethod {
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AdyenPaymentRequest<'a> {
+pub struct AdyenPaymentRequest {
     amount: Amount,
     merchant_account: Secret<String>,
     payment_method: PaymentMethod,
@@ -176,9 +190,83 @@ impl<T> TryFrom<(MinorUnit, T)> for AdyenRouterData<T> {
     }
 }
 
+fn get_amount_data(item: &AdyenRouterData<&PaymentsAuthorizeRouterData>) -> Amount {
+    Amount {
+        currency: item.router_data.request.currency,
+        value: item.amount.to_owned(),
+    }
+}
 
-impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentRequest<'_> {
-    type Error = Error;
+pub struct AdyenAuthType {
+    pub(super) api_key: Secret<String>,
+    pub(super) merchant_account: Secret<String>,
+    #[allow(dead_code)]
+    pub(super) review_key: Option<Secret<String>>,
+}
+
+impl TryFrom<&ConnectorAuthType> for AdyenAuthType {
+    type Error = ConnectorError;
+    fn try_from(auth_type: &ConnectorAuthType) -> Result<Self, Self::Error> {
+        match auth_type {
+            ConnectorAuthType::BodyKey { api_key, key1 } => Ok(Self {
+                api_key: api_key.to_owned(),
+                merchant_account: key1.to_owned(),
+                review_key: None,
+            }),
+            ConnectorAuthType::SignatureKey {
+                api_key,
+                key1,
+                api_secret,
+            } => Ok(Self {
+                api_key: api_key.to_owned(),
+                merchant_account: key1.to_owned(),
+                review_key: Some(api_secret.to_owned()),
+            }),
+            _ => Err(ConnectorError::FailedToObtainAuthType)?,
+        }
+    }
+}
+
+impl TryFrom<(&AdyenRouterData<&PaymentsAuthorizeRouterData>, &Card)> for AdyenPaymentRequest {
+    type Error = ConnectorError;
+    fn try_from(
+        value: (&AdyenRouterData<&PaymentsAuthorizeRouterData>, &Card),
+    ) -> Result<Self, Self::Error> {
+        let (item, card_data) = value;
+        let amount = get_amount_data(item);
+        let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
+        let browser_info = None;
+        let billing_address = Address {
+            city: "New York".to_string(),
+            country: enums::CountryAlpha2::US,
+            house_number_or_name: "1234".to_string().into(),
+            postal_code: "123456".to_string().into(),
+            state_or_province: Some("California".to_string().into()),
+            street: Some(Secret<String>),
+        }
+        let country_code = get_country_code(item.router_data.get_optional_billing());
+        let return_url = "www.google.com".to_string();
+        let card_holder_name = "Sagnik Mitra";
+        let payment_method = PaymentMethod::AdyenPaymentMethod(Box::new(
+            AdyenPaymentMethod::try_from((card_data, card_holder_name))?,
+        ));
+
+        Ok(AdyenPaymentRequest {
+            amount,
+            merchant_account: auth_type.merchant_account,
+            payment_method,
+            reference: item.router_data.connector_request_reference_id.clone(),
+            return_url,
+            browser_info: None,
+            billing_address,
+            country_code,
+        })
+    }
+}
+
+
+impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentRequest {
+    type Error = ConnectorError;
     fn try_from(item: &AdyenRouterData<&PaymentsAuthorizeRouterData>) -> Result<Self, Self::Error> {
         match item
             .router_data
@@ -187,48 +275,25 @@ impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentReq
             .to_owned()
             .and_then(|mandate_ids| mandate_ids.mandate_reference_id)
         {
-            Some(mandate_ref) => AdyenPaymentRequest::try_from((item, mandate_ref)),
+            Some(mandate_ref) => Err(ConnectorError::NotImplemented)?,
             None => match item.router_data.request.payment_method_data {
                 PaymentMethodData::Card(ref card) => AdyenPaymentRequest::try_from((item, card)),
-                PaymentMethodData::Wallet(ref wallet) => {
-                    AdyenPaymentRequest::try_from((item, wallet))
-                }
-                PaymentMethodData::PayLater(ref pay_later) => {
-                    AdyenPaymentRequest::try_from((item, pay_later))
-                }
-                PaymentMethodData::BankRedirect(ref bank_redirect) => {
-                    AdyenPaymentRequest::try_from((item, bank_redirect))
-                }
-                PaymentMethodData::BankDebit(ref bank_debit) => {
-                    AdyenPaymentRequest::try_from((item, bank_debit))
-                }
-                PaymentMethodData::BankTransfer(ref bank_transfer) => {
-                    AdyenPaymentRequest::try_from((item, bank_transfer.as_ref()))
-                }
-                PaymentMethodData::CardRedirect(ref card_redirect_data) => {
-                    AdyenPaymentRequest::try_from((item, card_redirect_data))
-                }
-                PaymentMethodData::Voucher(ref voucher_data) => {
-                    AdyenPaymentRequest::try_from((item, voucher_data))
-                }
-                PaymentMethodData::GiftCard(ref gift_card_data) => {
-                    AdyenPaymentRequest::try_from((item, gift_card_data.as_ref()))
-                }
-                PaymentMethodData::NetworkToken(ref token_data) => {
-                    AdyenPaymentRequest::try_from((item, token_data))
-                }
-                PaymentMethodData::Crypto(_)
+                | PaymentMethodData::Wallet(_)
+                | PaymentMethodData::PayLater(_)
+                | PaymentMethodData::BankRedirect(_)
+                | PaymentMethodData::BankDebit(_)
+                | PaymentMethodData::BankTransfer(_)
+                | PaymentMethodData::CardRedirect(_)
+                | PaymentMethodData::Voucher(_)
+                | PaymentMethodData::GiftCard(_)
+                | PaymentMethodData::Crypto(_)
                 | PaymentMethodData::MandatePayment
                 | PaymentMethodData::Reward
                 | PaymentMethodData::RealTimePayment(_)
-                | PaymentMethodData::MobilePayment(_)
                 | PaymentMethodData::Upi(_)
                 | PaymentMethodData::OpenBanking(_)
-                | PaymentMethodData::CardToken(_)
-                | PaymentMethodData::CardDetailsForNetworkTransactionId(_) => {
-                    Err(errors::ConnectorError::NotImplemented(
-                        utils::get_unimplemented_payment_method_error_message("Adyen"),
-                    ))?
+                | PaymentMethodData::CardToken(_) => {
+                    Err(ConnectorError::NotImplemented)?
                 }
             },
         }
@@ -336,113 +401,6 @@ pub enum AttemptStatus {
     DeviceDataCollectionPending,
 }
 
-#[router_derive::diesel_enum(storage_type = "text")]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum PaymentMethodType {
-    Ach,
-    Affirm,
-    AfterpayClearpay,
-    Alfamart,
-    AliPay,
-    AliPayHk,
-    Alma,
-    AmazonPay,
-    ApplePay,
-    Atome,
-    Bacs,
-    BancontactCard,
-    Becs,
-    Benefit,
-    Bizum,
-    Blik,
-    Boleto,
-    BcaBankTransfer,
-    BniVa,
-    BriVa,
-    CardRedirect,
-    CimbVa,
-    #[serde(rename = "classic")]
-    ClassicReward,
-    Credit,
-    CryptoCurrency,
-    Cashapp,
-    Dana,
-    DanamonVa,
-    Debit,
-    DuitNow,
-    Efecty,
-    Eft,
-    Eps,
-    Fps,
-    Evoucher,
-    Giropay,
-    Givex,
-    GooglePay,
-    GoPay,
-    Gcash,
-    Ideal,
-    Interac,
-    Indomaret,
-    Klarna,
-    KakaoPay,
-    LocalBankRedirect,
-    MandiriVa,
-    Knet,
-    MbWay,
-    MobilePay,
-    Momo,
-    MomoAtm,
-    Multibanco,
-    OnlineBankingThailand,
-    OnlineBankingCzechRepublic,
-    OnlineBankingFinland,
-    OnlineBankingFpx,
-    OnlineBankingPoland,
-    OnlineBankingSlovakia,
-    Oxxo,
-    PagoEfectivo,
-    PermataBankTransfer,
-    OpenBankingUk,
-    PayBright,
-    Paypal,
-    Paze,
-    Pix,
-    PaySafeCard,
-    Przelewy24,
-    PromptPay,
-    Pse,
-    RedCompra,
-    RedPagos,
-    SamsungPay,
-    Sepa,
-    SepaBankTransfer,
-    Sofort,
-    Swish,
-    TouchNGo,
-    Trustly,
-    Twint,
-    UpiCollect,
-    UpiIntent,
-    Vipps,
-    VietQr,
-    Venmo,
-    Walley,
-    WeChatPay,
-    SevenEleven,
-    Lawson,
-    MiniStop,
-    FamilyMart,
-    Seicomart,
-    PayEasy,
-    LocalBankTransfer,
-    Mifinity,
-    #[serde(rename = "open_banking_pis")]
-    OpenBankingPIS,
-    DirectCarrierBilling,
-    InstantBankTransfer,
-}
-
 fn get_adyen_payment_status(
     is_manual_capture: bool,
     adyen_status: AdyenStatus,
@@ -465,12 +423,7 @@ fn get_adyen_payment_status(
         | AdyenStatus::RedirectShopper
         | AdyenStatus::PresentToShopper => AttemptStatus::AuthenticationPending,
         AdyenStatus::Error | AdyenStatus::Refused => AttemptStatus::Failure,
-        AdyenStatus::Pending => match pmt {
-            Some(PaymentMethodType::Pix) => {
-                AttemptStatus::AuthenticationPending
-            }
-            _ => AttemptStatus::Pending,
-        },
+        AdyenStatus::Pending => AttemptStatus::Pending,
         #[cfg(feature = "payouts")]
         AdyenStatus::PayoutConfirmReceived => AttemptStatus::Started,
         #[cfg(feature = "payouts")]
@@ -488,7 +441,7 @@ impl<F, Req>
         Option<PaymentMethodType>,
     )> for RouterData<F, Req, PaymentsResponseData>
 {
-    type Error = Error;
+    type Error = ConnectorError;
     fn foreign_try_from(
         (item, capture_method, is_multiple_capture_psync_flow, pmt): (
             ResponseRouterData<F, AdyenPaymentResponse, Req, PaymentsResponseData>,
