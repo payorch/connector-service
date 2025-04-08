@@ -14,6 +14,7 @@ use hyperswitch_domain_models::{
     api::ApplicationResponse,
     payment_method_data::PaymentMethodData,
     router_data::{AccessToken, ConnectorAuthType, ErrorResponse, RouterData},
+    router_data_v2::RouterDataV2,
     router_flow_types::{
         access_token_auth::AccessTokenAuth,
         payments::{
@@ -71,6 +72,7 @@ use hyperswitch_interfaces::{
     connector_integration_v2::ConnectorIntegrationV2,
 };
 use hyperswitch_masking::{ExposeInterface, Mask, Maskable, Secret};
+use hyperswitch_connectors::types::ResponseRouterData;
 use error_stack::{report, ResultExt};
 
 use transformers as adyen;
@@ -161,11 +163,9 @@ impl ConnectorCommon for Adyen {
         let response: adyen::AdyenErrorResponse = res
             .response
             .parse_struct("ErrorResponse")
-            .map_err(error_stack::report::Report::new)?
-            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            .map_err(|_| errors::ConnectorError::ResponseDeserializationFailed)?;
 
         event_builder.map(|i| i.set_error_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
 
         Ok(ErrorResponse {
             status_code: res.status_code,
@@ -212,27 +212,10 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
     fn get_request_body(
         &self,
         req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
-    ) -> CustomResult<RequestContent, errors::ConnectorError> {
+    ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
         let connector_router_data = adyen::AdyenRouterData::try_from((req.request.minor_amount, req))?;
         let connector_req = adyen::AdyenPaymentRequest::try_from(&connector_router_data)?;
-        Ok(RequestContent::Json(Box::new(connector_req)))
-    }
-
-    fn build_request_v2(
-        &self,
-        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
-    ) -> CustomResult<Option<Request>, errors::ConnectorError> {
-        Ok(Some(
-            RequestBuilder::new()
-                .method(Method::Post)
-                .url(&PaymentsAuthorizeType::get_url(self, req, connectors)?)
-                .attach_default_headers()
-                .headers(PaymentsAuthorizeType::get_headers(self, req, connectors)?)
-                .set_body(PaymentsAuthorizeType::get_request_body(
-                    self, req, connectors,
-                )?)
-                .build(),
-        ))
+        Ok(Some(RequestContent::Json(Box::new(connector_req))))
     }
 
     fn handle_response_v2(
@@ -240,26 +223,14 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
         data: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
-    ) -> CustomResult<PaymentsAuthorizeRouterData, errors::ConnectorError> {
+    ) -> CustomResult<RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>, errors::ConnectorError> {
         let response: adyen::AdyenPaymentResponse = res
             .response
             .parse_struct("AdyenPaymentResponse")
-            .map_err(error_stack::report::Report::new)?
-            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            .map_err(|_| errors::ConnectorError::ResponseDeserializationFailed)?;
+
         event_builder.map(|i| i.set_response_body(&response));
-        router_env::logger::info!(connector_response=?response);
-        RouterData::try_from((
-            ResponseRouterData {
-                response,
-                data: data.clone(),
-                http_code: res.status_code,
-            },
-            data.request.capture_method,
-            false,
-            data.request.payment_method_type,
-        ))
-        .map_err(error_stack::report::Report::new)?
-        .change_context(errors::ConnectorError::ResponseHandlingFailed)
+        Ok(data.clone())
     }
 
     fn get_error_response_v2(
