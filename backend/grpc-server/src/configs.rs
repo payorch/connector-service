@@ -51,7 +51,7 @@ impl Config {
         let config = Self::builder(&env)?
             .add_source(config::File::from(config_path).required(false))
             .add_source(
-                config::Environment::with_prefix("DYNAMO")
+                config::Environment::with_prefix("CS")
                     .try_parsing(true)
                     .separator("__")
                     .list_separator(",")

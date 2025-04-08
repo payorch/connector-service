@@ -1,5 +1,6 @@
 use crate::{configs, error::ConfigurationError, logger, utils, metrics};
 use axum::http;
+use grpc_api_types::health_check::health_server;
 use std::{future::Future, net};
 use tokio::{
     signal::unix::{SignalKind, signal},
@@ -7,6 +8,8 @@ use tokio::{
 };
 use tonic::transport::Server;
 use tower_http::trace as tower_trace;
+
+use grpc_api_types::health_check::health_handler;
 
 /// # Panics
 ///
@@ -57,7 +60,7 @@ pub async fn server_builder(config: configs::Config) -> Result<(), Configuration
 
     let service = Service::new(config.clone());
 
-    logger::info!(host = %server_config.host, port = %server_config.port, r#type = ?server_config.type_, "starting dynamo");
+    logger::info!(host = %server_config.host, port = %server_config.port, r#type = ?server_config.type_, "starting connector service");
 
     match server_config.type_ {
         configs::ServiceType::Grpc => {
@@ -77,7 +80,9 @@ pub async fn server_builder(config: configs::Config) -> Result<(), Configuration
     Ok(())
 }
 
-pub struct Service {}
+pub struct Service {
+    health_check_service: crate::server::health_check::HealthCheck,
+}
 
 impl Service {
     /// # Panics
@@ -85,9 +90,11 @@ impl Service {
     /// Will panic either if database password, hash key isn't present in configs or unable to
     /// deserialize any of the above keys
     #[allow(clippy::expect_used)]
-    pub async fn new(config: configs::Config) -> Self {
+    pub async fn new(_config: configs::Config) -> Self {
 
-        Self {}
+        Self {
+            health_check_service: crate::server::health_check::HealthCheck,
+        }
     }
 
     pub async fn http_server(
@@ -112,10 +119,10 @@ impl Service {
             );
 
         let router = axum::Router::new()
-            .layer(logging_layer);
-            // .merge(health_proto::proto_items::health_handler(
-            //     self.health_check_service,
-            // ));
+            .layer(logging_layer)
+            .merge(health_handler(
+                self.health_check_service,
+            ));
 
         let listener = tokio::net::TcpListener::bind(socket).await?;
 
@@ -131,9 +138,9 @@ impl Service {
         socket: net::SocketAddr,
         shutdown_signal: impl Future<Output = ()>,
     ) -> Result<(), ConfigurationError> {
-        // let reflection_service = tonic_reflection::server::Builder::configure()
-        //     .register_encoded_file_descriptor_set(proto_build::FILE_DESCRIPTOR_SET)
-        //     .build_v1()?;
+        let reflection_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(grpc_api_types::FILE_DESCRIPTOR_SET)
+            .build_v1()?;
 
         let logging_layer = tower_trace::TraceLayer::new_for_http()
             .make_span_with(|request: &http::request::Request<_>| {
@@ -153,9 +160,9 @@ impl Service {
 
         Server::builder()
             .layer(logging_layer)
-            // .add_service(reflection_service)
-            // .add_service(health_proto::HealthServer::new(self.health_check_service))
-            // .serve_with_shutdown(socket, shutdown_signal)
+            .add_service(reflection_service)
+            .add_service(health_server::HealthServer::new(self.health_check_service))
+            .serve_with_shutdown(socket, shutdown_signal)
             .await?;
 
         Ok(())

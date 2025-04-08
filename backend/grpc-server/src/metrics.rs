@@ -5,7 +5,7 @@ use prometheus::{
     self, Encoder, TextEncoder
 };
 
-const MICROS_500: f64 = 0.0001;
+// const MICROS_500: f64 = 0.0001;
 
 lazy_static! {
     // pub static ref SUCCESS_BASED_ROUTING_METRICS_REQUEST: IntCounter = register_int_counter!(

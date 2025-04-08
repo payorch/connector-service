@@ -1667,6 +1667,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "g2h"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84a4f0acc801bb942fbbae4e10ef230bef8168dcb31bf7601ab640495435cb4c"
+dependencies = [
+ "heck 0.5.0",
+ "prost-build",
+ "quote",
+ "tonic-build 0.13.0",
+]
+
+[[package]]
 name = "generator"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1753,10 +1765,17 @@ dependencies = [
 name = "grpc-api-types"
 version = "0.1.0"
 dependencies = [
+ "axum 0.8.3",
  "cargo_metadata",
+ "g2h",
  "heck 0.5.0",
+ "http 1.3.1",
+ "prost",
  "prost-build",
- "tonic-build",
+ "serde",
+ "tonic",
+ "tonic-build 0.12.3",
+ "tonic-reflection",
 ]
 
 [[package]]
@@ -1776,6 +1795,7 @@ dependencies = [
  "fred",
  "futures",
  "gethostname",
+ "grpc-api-types",
  "hex",
  "http 1.3.1",
  "hyper 1.6.0",
@@ -4580,6 +4600,20 @@ name = "tonic-build"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build",
+ "prost-types",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "tonic-build"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d85f0383fadd15609306383a90e85eaed44169f931a5d2be1b42c76ceff1825e"
 dependencies = [
  "prettyplease",
  "proc-macro2",

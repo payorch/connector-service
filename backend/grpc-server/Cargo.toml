@@ -35,6 +35,10 @@ use_self = "warn"
 option_map_unit_fn = "allow"
 
 [dependencies]
+# First-party dependencies
+grpc-api-types = { version = "0.1.0", path = "../grpc-api-types" }
+
+# Third-party dependencies
 config = "0.14.0"
 error-stack = "0.4.1"
 fred = { version = "7.1.2" }

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ucas.payment;
+package ucs.payments;
 
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
