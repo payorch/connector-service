@@ -166,6 +166,16 @@ pub struct AdyenRouterData<T> {
     pub router_data: T,
 }
 
+impl<T> TryFrom<(MinorUnit, T)> for AdyenRouterData<T> {
+    type Error = error_stack::Report<errors::ConnectorError>;
+    fn try_from((amount, item): (MinorUnit, T)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            amount,
+            router_data: item,
+        })
+    }
+}
+
 
 impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentRequest<'_> {
     type Error = Error;

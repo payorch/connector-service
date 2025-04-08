@@ -71,6 +71,7 @@ use hyperswitch_interfaces::{
     connector_integration_v2::ConnectorIntegrationV2,
 };
 use hyperswitch_masking::{ExposeInterface, Mask, Maskable, Secret};
+use error_stack::{report, ResultExt};
 
 use transformers as adyen;
 
@@ -130,18 +131,69 @@ pub struct Adyen {
     amount_converter: &'static (dyn AmountConvertor<Output = MinorUnit> + Sync),
 }
 
+impl ConnectorCommon for Adyen {
+    fn id(&self) -> &'static str {
+        "adyen"
+    }
+    fn get_currency_unit(&self) -> api::CurrencyUnit {
+        api::CurrencyUnit::Minor
+    }
+    fn get_auth_header(
+        &self,
+        auth_type: &ConnectorAuthType,
+    ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError> {
+        let auth = adyen::AdyenAuthType::try_from(auth_type)
+            .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
+        Ok(vec![(
+            headers::X_API_KEY.to_string(),
+            auth.api_key.into_masked(),
+        )])
+    }
+    fn base_url<'a>(&self, connectors: &'a Connectors) -> &'a str {
+        connectors.adyen.base_url.as_ref()
+    }
+
+    fn build_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        let response: adyen::AdyenErrorResponse = res
+            .response
+            .parse_struct("ErrorResponse")
+            .map_err(error_stack::report::Report::new)?
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+
+        event_builder.map(|i| i.set_error_response_body(&response));
+        router_env::logger::info!(connector_response=?response);
+
+        Ok(ErrorResponse {
+            status_code: res.status_code,
+            code: response.error_code,
+            message: response.message.to_owned(),
+            reason: Some(response.message),
+            attempt_status: None,
+            connector_transaction_id: response.psp_reference,
+        })
+    }
+}
+
+impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData> for Adyen {
+    // implement required trait methods here
+}
+
+
 impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData> for Adyen {
     fn get_headers(
         &self,
-        req: &PaymentsAuthorizeRouterData,
-        _connectors: &Connectors,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
     where
         Self: ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     {
         let mut header = vec![(
             headers::CONTENT_TYPE.to_string(),
-            PaymentsAuthorizeType::get_content_type(self)
+            "application/json"
                 .to_string()
                 .into(),
         )];
@@ -152,16 +204,14 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn get_url(
         &self,
-        req: &PaymentsAuthorizeRouterData,
-        connectors: &Connectors,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
         Ok(format!("{}{}/payments", "endpoint", "ADYEN_API_VERSION"))
     }
 
     fn get_request_body(
         &self,
-        req: &PaymentsAuthorizeRouterData,
-        _connectors: &Connectors,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<RequestContent, errors::ConnectorError> {
         let connector_router_data = adyen::AdyenRouterData::try_from((req.request.minor_amount, req))?;
         let connector_req = adyen::AdyenPaymentRequest::try_from(&connector_router_data)?;
@@ -170,8 +220,7 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn build_request_v2(
         &self,
-        req: &PaymentsAuthorizeRouterData,
-        connectors: &Connectors,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<Option<Request>, errors::ConnectorError> {
         Ok(Some(
             RequestBuilder::new()
@@ -188,17 +237,18 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn handle_response_v2(
         &self,
-        data: &PaymentsAuthorizeRouterData,
+        data: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<PaymentsAuthorizeRouterData, errors::ConnectorError> {
         let response: adyen::AdyenPaymentResponse = res
             .response
             .parse_struct("AdyenPaymentResponse")
+            .map_err(error_stack::report::Report::new)?
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
         event_builder.map(|i| i.set_response_body(&response));
         router_env::logger::info!(connector_response=?response);
-        RouterData::foreign_try_from((
+        RouterData::try_from((
             ResponseRouterData {
                 response,
                 data: data.clone(),
@@ -208,6 +258,7 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
             false,
             data.request.payment_method_type,
         ))
+        .map_err(error_stack::report::Report::new)?
         .change_context(errors::ConnectorError::ResponseHandlingFailed)
     }
 
