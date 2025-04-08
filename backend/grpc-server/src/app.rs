@@ -1,9 +1,9 @@
-use crate::{configs, error::ConfigurationError, logger, utils, metrics};
+use crate::{configs, error::ConfigurationError, logger, metrics, utils};
 use axum::http;
 use grpc_api_types::health_check::health_server;
 use std::{future::Future, net};
 use tokio::{
-    signal::unix::{SignalKind, signal},
+    signal::unix::{signal, SignalKind},
     sync::oneshot,
 };
 use tonic::transport::Server;
@@ -91,7 +91,6 @@ impl Service {
     /// deserialize any of the above keys
     #[allow(clippy::expect_used)]
     pub async fn new(_config: configs::Config) -> Self {
-
         Self {
             health_check_service: crate::server::health_check::HealthCheck,
         }
@@ -120,9 +119,7 @@ impl Service {
 
         let router = axum::Router::new()
             .layer(logging_layer)
-            .merge(health_handler(
-                self.health_check_service,
-            ));
+            .merge(health_handler(self.health_check_service));
 
         let listener = tokio::net::TcpListener::bind(socket).await?;
 

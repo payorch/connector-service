@@ -1,9 +1,6 @@
-
 use error_stack::ResultExt;
 use lazy_static::lazy_static;
-use prometheus::{
-    self, Encoder, TextEncoder
-};
+use prometheus::{self, Encoder, TextEncoder};
 
 // const MICROS_500: f64 = 0.0001;
 

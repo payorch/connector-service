@@ -1,4 +1,4 @@
-use grpc_server::{app, configs, logger, self};
+use grpc_server::{self, app, configs, logger};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

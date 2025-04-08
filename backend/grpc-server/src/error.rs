@@ -1,4 +1,3 @@
-
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigurationError {
     #[error("Invalid host for socket: {0}")]
@@ -12,7 +11,6 @@ pub enum ConfigurationError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParsingError {

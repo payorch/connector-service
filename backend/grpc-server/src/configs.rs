@@ -1,8 +1,6 @@
-
 use std::path::PathBuf;
 
 use crate::{consts, error::ConfigurationError, logger::config::Log};
-
 
 #[derive(Clone, serde::Deserialize, Debug)]
 pub struct Config {
@@ -11,7 +9,6 @@ pub struct Config {
     pub log: Log,
 }
 
-
 #[derive(Clone, serde::Deserialize, Debug)]
 pub struct Server {
     pub host: String,
@@ -19,7 +16,6 @@ pub struct Server {
     #[serde(rename = "type", default)]
     pub type_: ServiceType,
 }
-
 
 #[derive(Clone, serde::Deserialize, Debug)]
 pub struct MetricsServer {
@@ -97,7 +93,6 @@ impl Config {
     }
 }
 
-
 impl Server {
     pub async fn tcp_listener(&self) -> Result<tokio::net::TcpListener, ConfigurationError> {
         let loc = format!("{}:{}", self.host, self.port);
@@ -117,7 +112,6 @@ impl MetricsServer {
         Ok(tokio::net::TcpListener::bind(loc).await?)
     }
 }
-
 
 pub fn workspace_path() -> PathBuf {
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {

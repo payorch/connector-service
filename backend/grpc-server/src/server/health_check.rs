@@ -1,10 +1,7 @@
 use grpc_api_types::health_check::{self, health_server};
 use tonic::{Request, Response, Status};
 
-
-
 pub struct HealthCheck;
-
 
 #[tonic::async_trait]
 impl health_server::Health for HealthCheck {
