@@ -1,5 +1,5 @@
 use hyperswitch_api_models::{
-    enums,
+    enums::{self, AttemptStatus},
 };
 
 use hyperswitch_common_utils::{
@@ -58,40 +58,6 @@ pub struct Amount {
 #[serde(rename_all = "lowercase")]
 pub enum CardBrand {
     Visa,
-    MC,
-    Amex,
-    Argencard,
-    Bcmc,
-    Bijcard,
-    Cabal,
-    Cartebancaire,
-    Codensa,
-    Cup,
-    Dankort,
-    Diners,
-    Discover,
-    Electron,
-    Elo,
-    Forbrugsforeningen,
-    Hiper,
-    Hipercard,
-    Jcb,
-    Karenmillen,
-    Laser,
-    Maestro,
-    Maestrouk,
-    Mcalphabankbonus,
-    Mir,
-    Naranja,
-    Oasis,
-    Rupay,
-    Shopping,
-    Solo,
-    Troy,
-    Uatp,
-    Visaalphabankbonus,
-    Visadankort,
-    Warehouse,
 }
 
 #[derive(Debug, PartialEq)]
@@ -181,7 +147,7 @@ pub struct AdyenRouterData<T> {
 }
 
 impl<T> TryFrom<(MinorUnit, T)> for AdyenRouterData<T> {
-    type Error = error_stack::Report<errors::ConnectorError>;
+    type Error = ConnectorError;
     fn try_from((amount, item): (MinorUnit, T)) -> Result<Self, Self::Error> {
         Ok(Self {
             amount,
@@ -227,6 +193,24 @@ impl TryFrom<&ConnectorAuthType> for AdyenAuthType {
     }
 }
 
+impl TryFrom<(&Card, Option<Secret<String>>)> for AdyenPaymentMethod {
+    type Error = ConnectorError;
+    fn try_from(
+        (card, card_holder_name): (&Card, Option<Secret<String>>),
+    ) -> Result<Self, Self::Error> {
+        let adyen_card = AdyenCard {
+            number: card.card_number.clone().to_string(),
+            expiry_month: card.card_exp_month.clone(),
+            expiry_year: "2031".to_string().into(),
+            cvc: Some(card.card_cvc.clone()),
+            holder_name: card_holder_name,
+            brand: Some(CardBrand::Visa),
+            network_payment_reference: None,
+        };
+        Ok(AdyenPaymentMethod::AdyenCard(Box::new(adyen_card)))
+    }
+}
+
 impl TryFrom<(&AdyenRouterData<&PaymentsAuthorizeRouterData>, &Card)> for AdyenPaymentRequest {
     type Error = ConnectorError;
     fn try_from(
@@ -235,20 +219,29 @@ impl TryFrom<(&AdyenRouterData<&PaymentsAuthorizeRouterData>, &Card)> for AdyenP
         let (item, card_data) = value;
         let amount = get_amount_data(item);
         let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
-        let browser_info = None;
-        let billing_address = Address {
+        let billing_address = Some(Address {
             city: "New York".to_string(),
             country: enums::CountryAlpha2::US,
             house_number_or_name: "1234".to_string().into(),
             postal_code: "123456".to_string().into(),
             state_or_province: Some("California".to_string().into()),
-            street: Some(Secret<String>),
-        }
-        let country_code = get_country_code(item.router_data.get_optional_billing());
+            street: Some("abcd".to_string().into()),
+        });
+        let country_code = Some(enums::CountryAlpha2::US);
         let return_url = "www.google.com".to_string();
-        let card_holder_name = "Sagnik Mitra";
+        let card_holder_name = Some("Sagnik Mitra".to_string().into());
+        let adyen_card = AdyenCard {
+            number: card_data.card_number.clone().to_string(),
+            expiry_month: card_data.card_exp_month.clone(),
+            expiry_year: "2031".to_string().into(),
+            cvc: Some(card_data.card_cvc.clone()),
+            holder_name: card_holder_name,
+            brand: Some(CardBrand::Visa),
+            network_payment_reference: None,
+        };
+        
         let payment_method = PaymentMethod::AdyenPaymentMethod(Box::new(
-            AdyenPaymentMethod::try_from((card_data, card_holder_name))?,
+            AdyenPaymentMethod::AdyenCard(Box::new(adyen_card))
         ));
 
         Ok(AdyenPaymentRequest {
@@ -263,7 +256,6 @@ impl TryFrom<(&AdyenRouterData<&PaymentsAuthorizeRouterData>, &Card)> for AdyenP
         })
     }
 }
-
 
 impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentRequest {
     type Error = ConnectorError;
@@ -299,6 +291,43 @@ impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentReq
         }
     }
 }
+
+
+
+// impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentRequest {
+//     type Error = ConnectorError;
+//     fn try_from(item: &AdyenRouterData<&PaymentsAuthorizeRouterData>) -> Result<Self, Self::Error> {
+//         match item
+//             .router_data
+//             .request
+//             .mandate_id
+//             .to_owned()
+//             .and_then(|mandate_ids| mandate_ids.mandate_reference_id)
+//         {
+//             Some(mandate_ref) => Err(ConnectorError::NotImplemented)?,
+//             None => match item.router_data.request.payment_method_data {
+//                 PaymentMethodData::Card(ref card) => AdyenPaymentRequest::try_from((item, card)),
+//                 | PaymentMethodData::Wallet(_)
+//                 | PaymentMethodData::PayLater(_)
+//                 | PaymentMethodData::BankRedirect(_)
+//                 | PaymentMethodData::BankDebit(_)
+//                 | PaymentMethodData::BankTransfer(_)
+//                 | PaymentMethodData::CardRedirect(_)
+//                 | PaymentMethodData::Voucher(_)
+//                 | PaymentMethodData::GiftCard(_)
+//                 | PaymentMethodData::Crypto(_)
+//                 | PaymentMethodData::MandatePayment
+//                 | PaymentMethodData::Reward
+//                 | PaymentMethodData::RealTimePayment(_)
+//                 | PaymentMethodData::Upi(_)
+//                 | PaymentMethodData::OpenBanking(_)
+//                 | PaymentMethodData::CardToken(_) => {
+//                     Err(ConnectorError::NotImplemented)?
+//                 }
+//             },
+//         }
+//     }
+// }
 
 pub struct ResponseRouterData<Flow, R, Request, Response> {
     pub response: R,
@@ -370,37 +399,6 @@ pub trait ForeignTryFrom<F>: Sized {
     fn foreign_try_from(from: F) -> Result<Self, Self::Error>;
 }
 
-#[router_derive::diesel_enum(storage_type = "db_enum")]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum AttemptStatus {
-    Started,
-    AuthenticationFailed,
-    RouterDeclined,
-    AuthenticationPending,
-    AuthenticationSuccessful,
-    Authorized,
-    AuthorizationFailed,
-    Charged,
-    Authorizing,
-    CodInitiated,
-    Voided,
-    VoidInitiated,
-    CaptureInitiated,
-    CaptureFailed,
-    VoidFailed,
-    AutoRefunded,
-    PartialCharged,
-    PartialChargedAndChargeable,
-    Unresolved,
-    #[default]
-    Pending,
-    Failure,
-    PaymentMethodAwaited,
-    ConfirmationAwaited,
-    DeviceDataCollectionPending,
-}
-
 fn get_adyen_payment_status(
     is_manual_capture: bool,
     adyen_status: AdyenStatus,
@@ -454,13 +452,13 @@ impl<F, Req>
         let status = get_adyen_payment_status(is_manual_capture,item.response.result_code,pmt);
         let payment_response_data = PaymentsResponseData::TransactionResponse {
             resource_id: ResponseId::ConnectorTransactionId(item.response.psp_reference),
-            redirection_data: Box::new(None),
-            mandate_reference: Box::new(None),
+            redirection_data: None,
+            mandate_reference: None,
             connector_metadata: None,
             network_txn_id: None,
             connector_response_reference_id: Some(item.response.merchant_reference),
             incremental_authorization_allowed: None,
-            charges: None,
+            charge_id: None,
         };
         let error=None;
 
@@ -470,4 +468,14 @@ impl<F, Req>
             ..item.data
         })
     }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenErrorResponse {
+    pub status: i32,
+    pub error_code: String,
+    pub message: String,
+    pub error_type: String,
+    pub psp_reference: Option<String>,
 }
