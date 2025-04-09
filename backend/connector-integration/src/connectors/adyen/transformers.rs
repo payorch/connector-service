@@ -13,7 +13,6 @@ use hyperswitch_domain_models::{
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum Currency {
     #[default]
@@ -60,7 +59,6 @@ pub enum AdyenPaymentMethod {
     #[serde(rename = "scheme")]
     AdyenCard(Box<AdyenCard>),
 }
-
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -129,7 +127,11 @@ impl<T> TryFrom<(MinorUnit, T)> for AdyenRouterData<T> {
     }
 }
 
-fn get_amount_data(item: &AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>>) -> Amount {
+fn get_amount_data(
+    item: &AdyenRouterData<
+        &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+    >,
+) -> Amount {
     Amount {
         currency: item.router_data.request.currency,
         value: item.amount.to_owned(),
@@ -184,10 +186,27 @@ impl TryFrom<(&Card, Option<Secret<String>>)> for AdyenPaymentMethod {
     }
 }
 
-impl TryFrom<(&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>>, &Card)> for AdyenPaymentRequest {
+impl
+    TryFrom<(
+        &AdyenRouterData<
+            &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        >,
+        &Card,
+    )> for AdyenPaymentRequest
+{
     type Error = hyperswitch_interfaces::errors::ConnectorError;
     fn try_from(
-        value: (&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>>, &Card),
+        value: (
+            &AdyenRouterData<
+                &RouterDataV2<
+                    Authorize,
+                    PaymentFlowData,
+                    PaymentsAuthorizeData,
+                    PaymentsResponseData,
+                >,
+            >,
+            &Card,
+        ),
     ) -> Result<Self, Self::Error> {
         let (item, card_data) = value;
         let amount = get_amount_data(item);
@@ -212,9 +231,9 @@ impl TryFrom<(&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, Payment
             brand: Some(CardBrand::Visa),
             network_payment_reference: None,
         };
-        
+
         let payment_method = PaymentMethod::AdyenPaymentMethod(Box::new(
-            AdyenPaymentMethod::AdyenCard(Box::new(adyen_card))
+            AdyenPaymentMethod::AdyenCard(Box::new(adyen_card)),
         ));
 
         Ok(AdyenPaymentRequest {
@@ -230,9 +249,19 @@ impl TryFrom<(&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, Payment
     }
 }
 
-impl TryFrom<&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>>> for AdyenPaymentRequest {
+impl
+    TryFrom<
+        &AdyenRouterData<
+            &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        >,
+    > for AdyenPaymentRequest
+{
     type Error = hyperswitch_interfaces::errors::ConnectorError;
-    fn try_from(item: &AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>>) -> Result<Self, Self::Error> {
+    fn try_from(
+        item: &AdyenRouterData<
+            &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        >,
+    ) -> Result<Self, Self::Error> {
         match item
             .router_data
             .request
@@ -240,10 +269,14 @@ impl TryFrom<&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, Payments
             .to_owned()
             .and_then(|mandate_ids| mandate_ids.mandate_reference_id)
         {
-            Some(_mandate_ref) => Err(hyperswitch_interfaces::errors::ConnectorError::NotImplemented("payment_method".into())),
+            Some(_mandate_ref) => Err(
+                hyperswitch_interfaces::errors::ConnectorError::NotImplemented(
+                    "payment_method".into(),
+                ),
+            ),
             None => match item.router_data.request.payment_method_data {
                 PaymentMethodData::Card(ref card) => AdyenPaymentRequest::try_from((item, card)),
-                | PaymentMethodData::Wallet(_)
+                PaymentMethodData::Wallet(_)
                 | PaymentMethodData::PayLater(_)
                 | PaymentMethodData::BankRedirect(_)
                 | PaymentMethodData::BankDebit(_)
@@ -257,9 +290,11 @@ impl TryFrom<&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, Payments
                 | PaymentMethodData::RealTimePayment(_)
                 | PaymentMethodData::Upi(_)
                 | PaymentMethodData::OpenBanking(_)
-                | PaymentMethodData::CardToken(_) => {
-                    Err(hyperswitch_interfaces::errors::ConnectorError::NotImplemented("payment method".into()))
-                }
+                | PaymentMethodData::CardToken(_) => Err(
+                    hyperswitch_interfaces::errors::ConnectorError::NotImplemented(
+                        "payment method".into(),
+                    ),
+                ),
             },
         }
     }
@@ -298,7 +333,6 @@ pub enum AdyenStatus {
     PresentToShopper,
 }
 
-
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CaptureMethod {
@@ -333,12 +367,8 @@ fn get_adyen_payment_status(
     _pmt: Option<hyperswitch_api_models::enums::PaymentMethodType>,
 ) -> AttemptStatus {
     match adyen_status {
-        AdyenStatus::AuthenticationFinished => {
-            AttemptStatus::AuthenticationSuccessful
-        }
-        AdyenStatus::AuthenticationNotRequired | AdyenStatus::Received => {
-            AttemptStatus::Pending
-        }
+        AdyenStatus::AuthenticationFinished => AttemptStatus::AuthenticationSuccessful,
+        AdyenStatus::AuthenticationNotRequired | AdyenStatus::Received => AttemptStatus::Pending,
         AdyenStatus::Authorised => match is_manual_capture {
             true => AttemptStatus::Authorized,
             // In case of Automatic capture Authorized is the final status of the payment
@@ -375,7 +405,7 @@ impl
         ),
     ) -> Result<Self, Self::Error> {
         let is_manual_capture = false;
-        let _status = get_adyen_payment_status(is_manual_capture,response.result_code,pmt);
+        let _status = get_adyen_payment_status(is_manual_capture, response.result_code, pmt);
         let payment_response_data = PaymentsResponseData::TransactionResponse {
             resource_id: ResponseId::ConnectorTransactionId(response.psp_reference.clone()),
             redirection_data: None,
@@ -386,25 +416,23 @@ impl
             incremental_authorization_allowed: None,
             charge_id: None,
         };
-        let error = if response.refusal_reason.is_some()
-        || response.refusal_reason_code.is_some()
-    {
-        Some(hyperswitch_domain_models::router_data::ErrorResponse {
-            code: response
-                .refusal_reason_code
-                .unwrap_or_else(|| "NO_ERROR_CODE".to_string()),
-            message: response
-                .refusal_reason
-                .clone()
-                .unwrap_or_else(|| "NO_ERROR_MESSAGE".to_string()),
-            reason: response.refusal_reason,
-            status_code: http_code,
-            attempt_status: None,
-            connector_transaction_id: Some(response.psp_reference.clone()),
-        })
-    } else {
-        None
-    };
+        let error = if response.refusal_reason.is_some() || response.refusal_reason_code.is_some() {
+            Some(hyperswitch_domain_models::router_data::ErrorResponse {
+                code: response
+                    .refusal_reason_code
+                    .unwrap_or_else(|| "NO_ERROR_CODE".to_string()),
+                message: response
+                    .refusal_reason
+                    .clone()
+                    .unwrap_or_else(|| "NO_ERROR_MESSAGE".to_string()),
+                reason: response.refusal_reason,
+                status_code: http_code,
+                attempt_status: None,
+                connector_transaction_id: Some(response.psp_reference.clone()),
+            })
+        } else {
+            None
+        };
 
         Ok(Self {
             response: error.map_or_else(|| Ok(payment_response_data), Err),

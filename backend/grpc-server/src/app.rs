@@ -1,6 +1,9 @@
 use crate::{configs, error::ConfigurationError, logger, metrics, utils};
 use axum::http;
-use grpc_api_types::{health_check::health_server, payments::{payment_service_handler, payment_service_server}};
+use grpc_api_types::{
+    health_check::health_server,
+    payments::{payment_service_handler, payment_service_server},
+};
 use std::{future::Future, net};
 use tokio::{
     signal::unix::{signal, SignalKind},
@@ -94,7 +97,7 @@ impl Service {
     pub async fn new(config: configs::Config) -> Self {
         Self {
             health_check_service: crate::server::health_check::HealthCheck,
-            payments_service: crate::server::payments::Payments {config},
+            payments_service: crate::server::payments::Payments { config },
         }
     }
 
@@ -162,7 +165,9 @@ impl Service {
             .layer(logging_layer)
             .add_service(reflection_service)
             .add_service(health_server::HealthServer::new(self.health_check_service))
-            .add_service(payment_service_server::PaymentServiceServer::new(self.payments_service))
+            .add_service(payment_service_server::PaymentServiceServer::new(
+                self.payments_service,
+            ))
             .serve_with_shutdown(socket, shutdown_signal)
             .await?;
 

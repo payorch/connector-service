@@ -9,25 +9,26 @@ use hyperswitch_common_utils::{
 
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
+    router_data_v2::{flow_common_types::PaymentFlowData, RouterDataV2},
     router_flow_types::payments::Authorize,
     router_request_types::PaymentsAuthorizeData,
-    router_data_v2::{
-        flow_common_types:: PaymentFlowData,
-        RouterDataV2,
-    },
     router_response_types::PaymentsResponseData,
 };
 
+use error_stack::ResultExt;
 use hyperswitch_interfaces::{
-    api::{self, payments_v2::PaymentAuthorizeV2, ConnectorCommon}, configs::Connectors, connector_integration_v2::ConnectorIntegrationV2, errors, events::connector_api_logs::ConnectorEvent, types::Response
+    api::{self, payments_v2::PaymentAuthorizeV2, ConnectorCommon},
+    configs::Connectors,
+    connector_integration_v2::ConnectorIntegrationV2,
+    errors,
+    events::connector_api_logs::ConnectorEvent,
+    types::Response,
 };
 use hyperswitch_masking::{Mask, Maskable};
-use error_stack::ResultExt;
 
 use transformers::{self as adyen, ForeignTryFrom};
 
 use crate::types::ConnectorServiceTrait;
-
 
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
@@ -97,19 +98,24 @@ impl ConnectorCommon for Adyen {
 
 const ADYEN_API_VERSION: &str = "v68";
 
-impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData> for Adyen {
+impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>
+    for Adyen
+{
     fn get_headers(
         &self,
         req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
     where
-        Self: ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        Self: ConnectorIntegrationV2<
+            Authorize,
+            PaymentFlowData,
+            PaymentsAuthorizeData,
+            PaymentsResponseData,
+        >,
     {
         let mut header = vec![(
             headers::CONTENT_TYPE.to_string(),
-            "application/json"
-                .to_string()
-                .into(),
+            "application/json".to_string().into(),
         )];
         let mut api_key = self.get_auth_header(&req.connector_auth_type)?;
         header.append(&mut api_key);
@@ -118,26 +124,43 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn get_url(
         &self,
-        _req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        _req: &RouterDataV2<
+            Authorize,
+            PaymentFlowData,
+            PaymentsAuthorizeData,
+            PaymentsResponseData,
+        >,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}/payments", "https://checkout-test.adyen.com/", ADYEN_API_VERSION))
+        Ok(format!(
+            "{}{}/payments",
+            "https://checkout-test.adyen.com/", ADYEN_API_VERSION
+        ))
     }
 
     fn get_request_body(
         &self,
         req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
-        let connector_router_data = adyen::AdyenRouterData::try_from((req.request.minor_amount, req))?;
+        let connector_router_data =
+            adyen::AdyenRouterData::try_from((req.request.minor_amount, req))?;
         let connector_req = adyen::AdyenPaymentRequest::try_from(&connector_router_data)?;
         Ok(Some(RequestContent::Json(Box::new(connector_req))))
     }
 
     fn handle_response_v2(
         &self,
-        data: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        data: &RouterDataV2<
+            Authorize,
+            PaymentFlowData,
+            PaymentsAuthorizeData,
+            PaymentsResponseData,
+        >,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
-    ) -> CustomResult<RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>, errors::ConnectorError> {
+    ) -> CustomResult<
+        RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        errors::ConnectorError,
+    > {
         let response: adyen::AdyenPaymentResponse = res
             .response
             .parse_struct("AdyenPaymentResponse")

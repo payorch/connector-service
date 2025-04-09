@@ -190,9 +190,7 @@ pub async fn call_connector_api(
 ) -> CustomResult<Result<Response, Response>, ApiClientError> {
     let url =
         reqwest::Url::parse(&request.url).change_context(ApiClientError::UrlEncodingFailed)?;
-    let should_bypass_proxy = proxy
-        .bypass_proxy_urls
-        .contains(&url.to_string());
+    let should_bypass_proxy = proxy.bypass_proxy_urls.contains(&url.to_string());
 
     let client = create_client(
         proxy,

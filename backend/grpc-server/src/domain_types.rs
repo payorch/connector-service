@@ -1,11 +1,18 @@
 use std::{collections::HashMap, str::FromStr};
 
-use error_stack::{report, ResultExt};
-use external_services::errors::{ApplicationErrorResponse, ApiError};
-use connector_integration as connector_integration_service;
-use grpc_api_types::payments::{PaymentsAuthorizeRequest, PaymentsAuthorizeResponse};
-use hyperswitch_domain_models::{payment_method_data::PaymentMethodData, router_data::ConnectorAuthType, router_data_v2::{PaymentFlowData, RouterDataV2}, router_flow_types::Authorize, router_request_types::{PaymentsAuthorizeData, ResponseId}, router_response_types::PaymentsResponseData};
 use crate::utils::ForeignTryFrom;
+use connector_integration as connector_integration_service;
+use error_stack::{report, ResultExt};
+use external_services::errors::{ApiError, ApplicationErrorResponse};
+use grpc_api_types::payments::{PaymentsAuthorizeRequest, PaymentsAuthorizeResponse};
+use hyperswitch_domain_models::{
+    payment_method_data::PaymentMethodData,
+    router_data::ConnectorAuthType,
+    router_data_v2::{PaymentFlowData, RouterDataV2},
+    router_flow_types::Authorize,
+    router_request_types::{PaymentsAuthorizeData, ResponseId},
+    router_response_types::PaymentsResponseData,
+};
 
 impl ForeignTryFrom<i32> for connector_integration_service::types::ConnectorEnum {
     type Error = ApplicationErrorResponse;
@@ -19,7 +26,8 @@ impl ForeignTryFrom<i32> for connector_integration_service::types::ConnectorEnum
                 error_identifier: 401,
                 error_message: format!("Invalid value for authenticate_by: {}", connector),
                 error_object: None,
-            }).into()),
+            })
+            .into()),
         }
     }
 }
@@ -44,7 +52,8 @@ impl ForeignTryFrom<i32> for hyperswitch_common_enums::CardNetwork {
                 error_identifier: 401,
                 error_message: format!("Invalid value for card network: {}", connector),
                 error_object: None,
-            }).into()),
+            })
+            .into()),
         }
     }
 }
@@ -52,43 +61,44 @@ impl ForeignTryFrom<i32> for hyperswitch_common_enums::CardNetwork {
 impl ForeignTryFrom<grpc_api_types::payments::PaymentMethodData> for PaymentMethodData {
     type Error = ApplicationErrorResponse;
 
-    fn foreign_try_from(value: grpc_api_types::payments::PaymentMethodData) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::PaymentMethodData,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         match value.data {
             Some(data) => match data {
-                grpc_api_types::payments::payment_method_data::Data::Card(card) => {
-                    Ok(PaymentMethodData::Card(
-                        hyperswitch_domain_models::payment_method_data::Card {
-                            card_number: hyperswitch_cards::CardNumber::from_str(&card.card_number)
-                                .change_context(
-                                    ApplicationErrorResponse::BadRequest(ApiError {
-                                        sub_code: "INVALID_CARD_NUMBER".to_owned(),
-                                        error_identifier: 400,
-                                        error_message: "Invalid card number".to_owned(),
-                                        error_object: None,
-                                    }),
-                                )?,
-                            card_exp_month: card.card_exp_month.into(),
-                            card_exp_year: card.card_exp_year.into(),
-                            card_cvc: card.card_cvc.into(),
-                            card_issuer: card.card_issuer,
-                            card_network: card.card_network.map(|network| {
+                grpc_api_types::payments::payment_method_data::Data::Card(card) => Ok(
+                    PaymentMethodData::Card(hyperswitch_domain_models::payment_method_data::Card {
+                        card_number: hyperswitch_cards::CardNumber::from_str(&card.card_number)
+                            .change_context(ApplicationErrorResponse::BadRequest(ApiError {
+                                sub_code: "INVALID_CARD_NUMBER".to_owned(),
+                                error_identifier: 400,
+                                error_message: "Invalid card number".to_owned(),
+                                error_object: None,
+                            }))?,
+                        card_exp_month: card.card_exp_month.into(),
+                        card_exp_year: card.card_exp_year.into(),
+                        card_cvc: card.card_cvc.into(),
+                        card_issuer: card.card_issuer,
+                        card_network: card
+                            .card_network
+                            .map(|network| {
                                 hyperswitch_common_enums::CardNetwork::foreign_try_from(network)
-                                .change_context(
-                                    ApplicationErrorResponse::BadRequest(ApiError {
-                                        sub_code: "INVALID_CARD_NETWORK".to_owned(),
-                                        error_identifier: 400,
-                                        error_message: "Invalid card network".to_owned(),
-                                        error_object: None,
-                                    }),
-                                )
-                            }).transpose()?,
-                            card_type: card.card_type,
-                            card_issuing_country: card.card_issuing_country,
-                            bank_code: card.bank_code,
-                            nick_name: card.nick_name.map(|name| name.into()),
-                        }
-                    ))
-                },
+                                    .change_context(ApplicationErrorResponse::BadRequest(
+                                        ApiError {
+                                            sub_code: "INVALID_CARD_NETWORK".to_owned(),
+                                            error_identifier: 400,
+                                            error_message: "Invalid card network".to_owned(),
+                                            error_object: None,
+                                        },
+                                    ))
+                            })
+                            .transpose()?,
+                        card_type: card.card_type,
+                        card_issuing_country: card.card_issuing_country,
+                        bank_code: card.bank_code,
+                        nick_name: card.nick_name.map(|name| name.into()),
+                    }),
+                ),
             },
             None => {
                 return Err(ApplicationErrorResponse::BadRequest(ApiError {
@@ -96,7 +106,8 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentMethodData> for PaymentMeth
                     error_identifier: 400,
                     error_message: "Payment method data is required".to_owned(),
                     error_object: None,
-                }).into());
+                })
+                .into());
             }
         }
     }
@@ -104,7 +115,9 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentMethodData> for PaymentMeth
 
 impl ForeignTryFrom<grpc_api_types::payments::Currency> for hyperswitch_common_enums::Currency {
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: grpc_api_types::payments::Currency) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::Currency,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         match value {
             grpc_api_types::payments::Currency::Aed => Ok(Self::AED),
             grpc_api_types::payments::Currency::All => Ok(Self::ALL),
@@ -264,23 +277,26 @@ impl ForeignTryFrom<grpc_api_types::payments::Currency> for hyperswitch_common_e
 impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
     type Error = ApplicationErrorResponse;
 
-    fn foreign_try_from(value: PaymentsAuthorizeRequest) -> Result<Self,  error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: PaymentsAuthorizeRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(Self {
-            payment_method_data: PaymentMethodData::foreign_try_from(value
-                .clone()
-                .payment_method_data
-                .ok_or_else(|| ApplicationErrorResponse::BadRequest(ApiError {
-                    sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
-                    error_identifier: 400,
-                    error_message: "Payment method data is required".to_owned(),
-                    error_object: None,
-                }))?)?,
+            payment_method_data: PaymentMethodData::foreign_try_from(
+                value.clone().payment_method_data.ok_or_else(|| {
+                    ApplicationErrorResponse::BadRequest(ApiError {
+                        sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
+                        error_identifier: 400,
+                        error_message: "Payment method data is required".to_owned(),
+                        error_object: None,
+                    })
+                })?,
+            )?,
             amount: value.amount,
             currency: hyperswitch_common_enums::Currency::foreign_try_from(value.currency())?,
             confirm: true,
             webhook_url: value.webhook_url,
-            browser_info: value.browser_info.map(
-                |info| hyperswitch_domain_models::router_request_types::BrowserInformation {
+            browser_info: value.browser_info.map(|info| {
+                hyperswitch_domain_models::router_request_types::BrowserInformation {
                     color_depth: None,
                     java_enabled: info.java_enabled,
                     java_script_enabled: info.java_script_enabled,
@@ -292,7 +308,7 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
                     accept_header: info.accept_header,
                     user_agent: info.user_agent,
                 }
-            ),
+            }),
             payment_method_type: Some(hyperswitch_common_enums::PaymentMethodType::Credit), //TODO
             minor_amount: hyperswitch_common_utils::types::MinorUnit::new(value.minor_amount),
             email: None,
@@ -325,21 +341,31 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
     }
 }
 
-impl ForeignTryFrom<grpc_api_types::payments::PaymentAddress> for hyperswitch_domain_models::payment_address::PaymentAddress {
+impl ForeignTryFrom<grpc_api_types::payments::PaymentAddress>
+    for hyperswitch_domain_models::payment_address::PaymentAddress
+{
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: grpc_api_types::payments::PaymentAddress) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::PaymentAddress,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         let shipping = match value.shipping {
-            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(address)?),
+            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(
+                address,
+            )?),
             None => None,
         };
 
         let billing = match value.billing {
-            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(address)?),
+            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(
+                address,
+            )?),
             None => None,
         };
 
         let payment_method_billing = match value.payment_method_billing {
-            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(address)?),
+            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(
+                address,
+            )?),
             None => None,
         };
 
@@ -352,28 +378,41 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentAddress> for hyperswitch_do
     }
 }
 
-impl ForeignTryFrom<grpc_api_types::payments::Address> for hyperswitch_api_models::payments::Address {
+impl ForeignTryFrom<grpc_api_types::payments::Address>
+    for hyperswitch_api_models::payments::Address
+{
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: grpc_api_types::payments::Address) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::Address,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         let email = match value.email {
-            Some(email) => Some(hyperswitch_common_utils::pii::Email::from_str(&email)
-            .change_context(
-                ApplicationErrorResponse::BadRequest(ApiError {
-                    sub_code: "INVALID_EMAIL".to_owned(),
-                    error_identifier: 400,
-                    error_message: "Invalid email".to_owned(),
-                    error_object: None,
-                }),
-            )?),
+            Some(email) => Some(
+                hyperswitch_common_utils::pii::Email::from_str(&email).change_context(
+                    ApplicationErrorResponse::BadRequest(ApiError {
+                        sub_code: "INVALID_EMAIL".to_owned(),
+                        error_identifier: 400,
+                        error_message: "Invalid email".to_owned(),
+                        error_object: None,
+                    }),
+                )?,
+            ),
             None => None,
         };
         Ok(Self {
             address: match value.address {
-                Some(address_details) => Some(hyperswitch_api_models::payments::AddressDetails::foreign_try_from(address_details)?),
+                Some(address_details) => Some(
+                    hyperswitch_api_models::payments::AddressDetails::foreign_try_from(
+                        address_details,
+                    )?,
+                ),
                 None => None,
             },
             phone: match value.phone {
-                Some(phone_details) => Some(hyperswitch_api_models::payments::PhoneDetails::foreign_try_from(phone_details)?),
+                Some(phone_details) => Some(
+                    hyperswitch_api_models::payments::PhoneDetails::foreign_try_from(
+                        phone_details,
+                    )?,
+                ),
                 None => None,
             },
             email,
@@ -635,25 +674,29 @@ impl ForeignTryFrom<i32> for hyperswitch_common_enums::CountryAlpha2 {
             246 => Ok(Self::YE),
             247 => Ok(Self::ZM),
             248 => Ok(Self::ZW),
-            _ => Err(
-                ApplicationErrorResponse::BadRequest(ApiError {
-                    sub_code: "INVALID_ADDRESS".to_owned(),
-                    error_identifier: 400,
-                    error_message: "Address is required".to_owned(),
-                    error_object: None,
-                })
-            )?,
+            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_ADDRESS".to_owned(),
+                error_identifier: 400,
+                error_message: "Address is required".to_owned(),
+                error_object: None,
+            }))?,
         }
     }
 }
 
-
-impl ForeignTryFrom<grpc_api_types::payments::AddressDetails> for hyperswitch_api_models::payments::AddressDetails {
+impl ForeignTryFrom<grpc_api_types::payments::AddressDetails>
+    for hyperswitch_api_models::payments::AddressDetails
+{
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: grpc_api_types::payments::AddressDetails) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::AddressDetails,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(Self {
             city: value.city,
-            country: value.country.map(|val| hyperswitch_common_enums::CountryAlpha2::foreign_try_from(val)).transpose()?,
+            country: value
+                .country
+                .map(|val| hyperswitch_common_enums::CountryAlpha2::foreign_try_from(val))
+                .transpose()?,
             line1: value.line1.map(|val| val.into()),
             line2: value.line2.map(|val| val.into()),
             line3: value.line3.map(|val| val.into()),
@@ -665,9 +708,13 @@ impl ForeignTryFrom<grpc_api_types::payments::AddressDetails> for hyperswitch_ap
     }
 }
 
-impl ForeignTryFrom<grpc_api_types::payments::PhoneDetails> for hyperswitch_api_models::payments::PhoneDetails {
+impl ForeignTryFrom<grpc_api_types::payments::PhoneDetails>
+    for hyperswitch_api_models::payments::PhoneDetails
+{
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: grpc_api_types::payments::PhoneDetails) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::PhoneDetails,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(Self {
             number: value.number.map(|number| number.into()),
             country_code: value.country_code,
@@ -678,18 +725,23 @@ impl ForeignTryFrom<grpc_api_types::payments::PhoneDetails> for hyperswitch_api_
 impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
     type Error = ApplicationErrorResponse;
 
-    fn foreign_try_from(value: PaymentsAuthorizeRequest) -> Result<Self,  error_stack::Report<Self::Error>> {
-
+    fn foreign_try_from(
+        value: PaymentsAuthorizeRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         let address = match value.address {
-            Some(address) => hyperswitch_domain_models::payment_address::PaymentAddress::foreign_try_from(address)?,
-            None => return Err(
-                ApplicationErrorResponse::BadRequest(ApiError {
+            Some(address) => {
+                hyperswitch_domain_models::payment_address::PaymentAddress::foreign_try_from(
+                    address,
+                )?
+            }
+            None => {
+                return Err(ApplicationErrorResponse::BadRequest(ApiError {
                     sub_code: "INVALID_ADDRESS".to_owned(),
                     error_identifier: 400,
                     error_message: "Address is required".to_owned(),
                     error_object: None,
-                })
-            )?,
+                }))?
+            }
         };
         Ok(Self {
             merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
@@ -727,20 +779,48 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
 
 impl ForeignTryFrom<grpc_api_types::payments::AuthType> for ConnectorAuthType {
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: grpc_api_types::payments::AuthType) -> Result<Self,  error_stack::Report<Self::Error>> {
-        let auth_details = value.auth_details
-            .ok_or_else(|| ApplicationErrorResponse::BadRequest(ApiError {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::AuthType,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let auth_details = value.auth_details.ok_or_else(|| {
+            ApplicationErrorResponse::BadRequest(ApiError {
                 sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
                 error_identifier: 400,
                 error_message: "Payment method data is required".to_owned(),
                 error_object: None,
-            }))?;
+            })
+        })?;
         Ok(match auth_details {
-            grpc_api_types::payments::auth_type::AuthDetails::HeaderKey(header_key) => Self::HeaderKey { api_key: header_key.api_key.into() },
-            grpc_api_types::payments::auth_type::AuthDetails::BodyKey(body_key) => Self::BodyKey { api_key: body_key.api_key.into(), key1: body_key.key1.into() },
-            grpc_api_types::payments::auth_type::AuthDetails::SignatureKey(signature_key) => Self::SignatureKey { api_key: signature_key.api_key.into(), key1: signature_key.key1.into(), api_secret: signature_key.api_secret.into() },
-            grpc_api_types::payments::auth_type::AuthDetails::MultiAuthKey(multi_auth_key) => Self::MultiAuthKey { api_key: multi_auth_key.api_key.into(), key1: multi_auth_key.key1.into(), api_secret: multi_auth_key.key2.clone().into(), key2:  multi_auth_key.key2.into() },
-            grpc_api_types::payments::auth_type::AuthDetails::CertificateAuth(certificate_auth) => Self::CertificateAuth { certificate: certificate_auth.certificate.into(), private_key: certificate_auth.private_key.into() },
+            grpc_api_types::payments::auth_type::AuthDetails::HeaderKey(header_key) => {
+                Self::HeaderKey {
+                    api_key: header_key.api_key.into(),
+                }
+            }
+            grpc_api_types::payments::auth_type::AuthDetails::BodyKey(body_key) => Self::BodyKey {
+                api_key: body_key.api_key.into(),
+                key1: body_key.key1.into(),
+            },
+            grpc_api_types::payments::auth_type::AuthDetails::SignatureKey(signature_key) => {
+                Self::SignatureKey {
+                    api_key: signature_key.api_key.into(),
+                    key1: signature_key.key1.into(),
+                    api_secret: signature_key.api_secret.into(),
+                }
+            }
+            grpc_api_types::payments::auth_type::AuthDetails::MultiAuthKey(multi_auth_key) => {
+                Self::MultiAuthKey {
+                    api_key: multi_auth_key.api_key.into(),
+                    key1: multi_auth_key.key1.into(),
+                    api_secret: multi_auth_key.key2.clone().into(),
+                    key2: multi_auth_key.key2.into(),
+                }
+            }
+            grpc_api_types::payments::auth_type::AuthDetails::CertificateAuth(certificate_auth) => {
+                Self::CertificateAuth {
+                    certificate: certificate_auth.certificate.into(),
+                    private_key: certificate_auth.private_key.into(),
+                }
+            }
             grpc_api_types::payments::auth_type::AuthDetails::NoKey(_) => Self::NoKey,
         })
     }
@@ -748,28 +828,48 @@ impl ForeignTryFrom<grpc_api_types::payments::AuthType> for ConnectorAuthType {
 
 impl ForeignTryFrom<ResponseId> for grpc_api_types::payments::ResponseId {
     type Error = ApplicationErrorResponse;
-    fn foreign_try_from(value: ResponseId) -> Result<Self,  error_stack::Report<Self::Error>> {
+    fn foreign_try_from(value: ResponseId) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(match value {
             ResponseId::ConnectorTransactionId(id) => Self {
-                id: Some(grpc_api_types::payments::response_id::Id::ConnectorTransactionId(id.into())),
+                id: Some(
+                    grpc_api_types::payments::response_id::Id::ConnectorTransactionId(id.into()),
+                ),
             },
             ResponseId::EncodedData(data) => Self {
-                id: Some(grpc_api_types::payments::response_id::Id::EncodedData(data.into())),
+                id: Some(grpc_api_types::payments::response_id::Id::EncodedData(
+                    data.into(),
+                )),
             },
             ResponseId::NoResponseId => Self {
-                id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(false)),
+                id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                    false,
+                )),
             },
         })
     }
 }
 
 pub fn generate_payment_authorize_response(
-    router_data_v2: RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+    router_data_v2: RouterDataV2<
+        Authorize,
+        PaymentFlowData,
+        PaymentsAuthorizeData,
+        PaymentsResponseData,
+    >,
 ) -> Result<PaymentsAuthorizeResponse, error_stack::Report<ApplicationErrorResponse>> {
     let transaction_response = router_data_v2.response;
     let response = match transaction_response {
         Ok(response) => match response {
-            PaymentsResponseData::TransactionResponse { resource_id, redirection_data, mandate_reference: _, connector_metadata: _, network_txn_id, connector_response_reference_id, incremental_authorization_allowed, charge_id: _ } => {
+            PaymentsResponseData::TransactionResponse {
+                resource_id,
+                redirection_data,
+                mandate_reference: _,
+                connector_metadata: _,
+                network_txn_id,
+                connector_response_reference_id,
+                incremental_authorization_allowed,
+                charge_id: _,
+            } => {
                 PaymentsAuthorizeResponse {
                     resource_id: Some(grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)?),
                     redirection_data: redirection_data.map(
@@ -813,30 +913,29 @@ pub fn generate_payment_authorize_response(
                     error_message: None,
                     error_code: None,
                 }
-            },
-            _ => Err(
-                ApplicationErrorResponse::BadRequest(ApiError {
-                    sub_code: "INVALID_RESPONSE".to_owned(),
-                    error_identifier: 400,
-                    error_message: "Invalid response from connector".to_owned(),
-                    error_object: None,
-                }))?,
-        },
-        Err(err) => {
-            PaymentsAuthorizeResponse {
-                resource_id:  Some(grpc_api_types::payments::ResponseId {
-                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(false)),
-                }),
-                redirection_data: None,
-                mandate_reference: None,
-                network_txn_id: None,
-                connector_response_reference_id: err.connector_transaction_id,
-                incremental_authorization_allowed: None,
-                status: 20,
-                error_message: Some(err.message),
-                error_code: Some(err.code),
             }
-        }
+            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_RESPONSE".to_owned(),
+                error_identifier: 400,
+                error_message: "Invalid response from connector".to_owned(),
+                error_object: None,
+            }))?,
+        },
+        Err(err) => PaymentsAuthorizeResponse {
+            resource_id: Some(grpc_api_types::payments::ResponseId {
+                id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                    false,
+                )),
+            }),
+            redirection_data: None,
+            mandate_reference: None,
+            network_txn_id: None,
+            connector_response_reference_id: err.connector_transaction_id,
+            incremental_authorization_allowed: None,
+            status: 20,
+            error_message: Some(err.message),
+            error_code: Some(err.code),
+        },
     };
     Ok(response)
 }

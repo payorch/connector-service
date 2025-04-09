@@ -95,10 +95,12 @@ impl PaymentService for Payments {
 
         let connector_auth_details = match ConnectorAuthType::foreign_try_from(auth_creds) {
             Ok(auth_type) => auth_type,
-            Err(e) => return Err(tonic::Status::invalid_argument(format!(
-                "Invalid auth_creds in request: {}",
-                e
-            )))
+            Err(e) => {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid auth_creds in request: {}",
+                    e
+                )))
+            }
         };
 
         // Construct router data
@@ -133,15 +135,16 @@ impl PaymentService for Payments {
         };
 
         // Generate response
-        let authorize_response = match crate::domain_types::generate_payment_authorize_response(response) {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
-                    "Response generation error: {}",
-                    e
-                )))
-            }
-        };
+        let authorize_response =
+            match crate::domain_types::generate_payment_authorize_response(response) {
+                Ok(resp) => resp,
+                Err(e) => {
+                    return Err(tonic::Status::internal(format!(
+                        "Response generation error: {}",
+                        e
+                    )))
+                }
+            };
 
         Ok(tonic::Response::new(authorize_response))
     }
