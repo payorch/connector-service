@@ -1,139 +1,45 @@
 pub mod transformers;
 
-// use base64::Engine;
-// use common_enums::enums::{self, PaymentMethodType};
 use hyperswitch_common_utils::{
-    consts,
     errors::CustomResult,
-    ext_traits::{ByteSliceExt, OptionExt},
-    request::{Method, Request, RequestBuilder, RequestContent},
-    types::{AmountConvertor, MinorUnit, MinorUnitForConnector},
+    ext_traits::ByteSliceExt,
+    request::RequestContent,
+    types::{AmountConvertor, MinorUnit},
 };
-// use error_stack::{report, ResultExt};
+
 use hyperswitch_domain_models::{
-    api::ApplicationResponse,
-    payment_method_data::PaymentMethodData,
-    router_data::{AccessToken, ConnectorAuthType, ErrorResponse, RouterData},
-    router_flow_types::{
-        access_token_auth::AccessTokenAuth,
-        payments::{
-            Authorize, Capture, PSync, PaymentMethodToken, PreProcessing, Session, SetupMandate,
-            Void,
-        },
-        refunds::{Execute, RSync},
-        Accept, Defend, Evidence, Retrieve, Upload,
-    },
-    router_request_types::{
-        AcceptDisputeRequestData, AccessTokenRequestData, DefendDisputeRequestData,
-        PaymentMethodTokenizationData, PaymentsAuthorizeData, PaymentsCancelData,
-        PaymentsCaptureData, PaymentsPreProcessingData, PaymentsSessionData, PaymentsSyncData,
-        RefundsData, RetrieveFileRequestData, SetupMandateRequestData, SubmitEvidenceRequestData,
-        SyncRequestType, UploadFileRequestData,
-    },
+    router_data::{ConnectorAuthType, ErrorResponse},
+    router_flow_types::payments::Authorize,
+    router_request_types::PaymentsAuthorizeData,
     router_data_v2::{
         flow_common_types:: PaymentFlowData,
         RouterDataV2,
     },
-    router_response_types::{
-        AcceptDisputeResponse, DefendDisputeResponse, PaymentsResponseData, RefundsResponseData,
-        RetrieveFileResponse, SubmitEvidenceResponse, UploadFileResponse,
-    },
-    types::{
-        PaymentsAuthorizeRouterData, PaymentsCancelRouterData, PaymentsCaptureRouterData,
-        PaymentsSyncRouterData, RefundsRouterData,
-        SetupMandateRouterData,
-    },
+    router_response_types::PaymentsResponseData,
 };
-#[cfg(feature = "payouts")]
-use hyperswitch_domain_models::{
-    router_flow_types::payouts::{PoCancel, PoCreate, PoEligibility, PoFulfill},
-    router_response_types::PayoutsResponseData,
-    types::{PayoutsData, PayoutsRouterData},
-};
-#[cfg(feature = "payouts")]
-use hyperswitch_interfaces::types::{
-    PayoutCancelType, PayoutCreateType, PayoutEligibilityType, PayoutFulfillType,
-};
+
 use hyperswitch_interfaces::{
-    api::{
-        self,
-        disputes::{AcceptDispute, DefendDispute, Dispute, SubmitEvidence},
-        files::{FilePurpose, FileUpload, RetrieveFile, UploadFile},
-        CaptureSyncMethod, ConnectorCommon, ConnectorIntegration,
-        ConnectorValidation,
-    },
+    api::{self, ConnectorCommon},
     configs::Connectors,
-    consts::{NO_ERROR_CODE, NO_ERROR_MESSAGE},
-    disputes, errors,
+    errors,
     events::connector_api_logs::ConnectorEvent,
-    types::{
-        AcceptDisputeType, DefendDisputeType, PaymentsAuthorizeType, PaymentsCaptureType,
-        PaymentsPreProcessingType, PaymentsSyncType, PaymentsVoidType, RefundExecuteType, Response,
-        SetupMandateType, SubmitEvidenceType,
-    },
+    types::Response,
     connector_integration_v2::ConnectorIntegrationV2,
 };
-use hyperswitch_masking::{ExposeInterface, Mask, Maskable, Secret};
-use hyperswitch_connectors::types::ResponseRouterData;
-use error_stack::{report, ResultExt};
-// use error_stack::{report, ResultExt};
+use hyperswitch_masking::{Mask, Maskable};
+use error_stack::ResultExt;
 
 use transformers::{self as adyen, ForeignTryFrom};
 
-#[cfg(feature = "payouts")]
-use crate::utils::PayoutsData as UtilsPayoutData;
-// use crate::{
-//     capture_method_not_supported,
-//     constants::{self, headers},
-//     types::{
-//         AcceptDisputeRouterData, DefendDisputeRouterData, ResponseRouterData,
-//         SubmitEvidenceRouterData,
-//     },
-//     utils::{
-//         self as connector_utils, convert_payment_authorize_router_response,
-//         convert_setup_mandate_router_data_to_authorize_router_data, is_mandate_supported,
-//         ForeignTryFrom, PaymentMethodDataType,
-//     },
-// };
 
 pub(crate) mod headers {
-    pub(crate) const ACCEPT: &str = "Accept";
-    pub(crate) const API_KEY: &str = "API-KEY";
-    pub(crate) const APIKEY: &str = "apikey";
-    pub(crate) const API_TOKEN: &str = "Api-Token";
-    pub(crate) const AUTHORIZATION: &str = "Authorization";
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
-    pub(crate) const DATE: &str = "Date";
-    pub(crate) const IDEMPOTENCY_KEY: &str = "Idempotency-Key";
-    pub(crate) const MESSAGE_SIGNATURE: &str = "Message-Signature";
-    pub(crate) const MERCHANT_ID: &str = "Merchant-ID";
-    pub(crate) const REQUEST_ID: &str = "request-id";
-    pub(crate) const NONCE: &str = "nonce";
-    pub(crate) const TIMESTAMP: &str = "Timestamp";
-    pub(crate) const TOKEN: &str = "token";
-    pub(crate) const X_ACCEPT_VERSION: &str = "X-Accept-Version";
-    pub(crate) const X_CC_API_KEY: &str = "X-CC-Api-Key";
-    pub(crate) const X_CC_VERSION: &str = "X-CC-Version";
-    pub(crate) const X_DATE: &str = "X-Date";
-    pub(crate) const X_LOGIN: &str = "X-Login";
-    pub(crate) const X_NN_ACCESS_KEY: &str = "X-NN-Access-Key";
-    pub(crate) const X_TRANS_KEY: &str = "X-Trans-Key";
-    pub(crate) const X_RANDOM_VALUE: &str = "X-RandomValue";
-    pub(crate) const X_REQUEST_DATE: &str = "X-RequestDate";
-    pub(crate) const X_VERSION: &str = "X-Version";
     pub(crate) const X_API_KEY: &str = "X-Api-Key";
-    pub(crate) const CORRELATION_ID: &str = "Correlation-Id";
-    pub(crate) const WP_API_VERSION: &str = "WP-Api-Version";
-    pub(crate) const SOURCE: &str = "Source";
-    pub(crate) const USER_AGENT: &str = "User-Agent";
-    pub(crate) const KEY: &str = "key";
-    pub(crate) const X_SIGNATURE: &str = "X-Signature";
-    pub(crate) const SOAP_ACTION: &str = "SOAPAction";
 }
 
 #[derive(Clone)]
 pub struct Adyen {
-    amount_converter: &'static (dyn AmountConvertor<Output = MinorUnit> + Sync),
+    _amount_converter: &'static (dyn AmountConvertor<Output = MinorUnit> + Sync),
 }
 
 impl ConnectorCommon for Adyen {
@@ -181,10 +87,7 @@ impl ConnectorCommon for Adyen {
     }
 }
 
-impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData> for Adyen {
-    // implement required trait methods here
-}
-
+const ADYEN_API_VERSION: &str = "v68";
 
 impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData> for Adyen {
     fn get_headers(
@@ -207,9 +110,9 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn get_url(
         &self,
-        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        _req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}{}/payments", "endpoint", "ADYEN_API_VERSION"))
+        Ok(format!("{}{}/payments", "https://checkout-test.adyen.com/", ADYEN_API_VERSION))
     }
 
     fn get_request_body(

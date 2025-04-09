@@ -1,43 +1,18 @@
-use std::default;
+use hyperswitch_api_models::enums::{self, AttemptStatus};
 
-use hyperswitch_api_models::{
-    enums::{self, AttemptStatus},
-};
+use hyperswitch_common_utils::types::MinorUnit;
 
-use hyperswitch_common_utils::{
-    errors,
-    types::MinorUnit,
-};
-// use error_stack::{report, ResultExt};
 use hyperswitch_domain_models::{
-    // network_tokenization::NetworkTokenNumber,
-    payment_method_data::{Card, PaymentMethodData}, router_data::{ConnectorAuthType, RouterData}, router_data_v2::{PaymentFlowData, RouterDataV2}, router_flow_types::Authorize, router_request_types::{PaymentsAuthorizeData, ResponseId}, router_response_types::PaymentsResponseData, types::{
-        PaymentsAuthorizeRouterData, PaymentsCancelRouterData, PaymentsCaptureRouterData,
-        RefundsRouterData,
-    }
+    payment_method_data::{Card, PaymentMethodData},
+    router_data::{ConnectorAuthType, RouterData},
+    router_data_v2::{PaymentFlowData, RouterDataV2},
+    router_flow_types::Authorize,
+    router_request_types::{PaymentsAuthorizeData, ResponseId},
+    router_response_types::PaymentsResponseData,
 };
-
-use hyperswitch_interfaces::{
-    consts,
-};
-use hyperswitch_masking::{ExposeInterface, PeekInterface, Secret};
+use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
-// use time::{Duration, OffsetDateTime, PrimitiveDateTime};
-// use url::Url;
 
-
-// use crate::{
-//     types::{
-//         AcceptDisputeRouterData, DefendDisputeRouterData, PaymentsCancelResponseRouterData,
-//         PaymentsCaptureResponseRouterData, RefundsResponseRouterData, ResponseRouterData,
-//         SubmitEvidenceRouterData,
-//     },
-//     utils::{
-//         self, is_manual_capture, missing_field_err, AddressDetailsData, BrowserInformationData,
-//         CardData, ForeignTryFrom, NetworkTokenData as UtilsNetworkTokenData,
-//         PaymentsAuthorizeRequestData, PhoneDetailsData, RouterData as OtherRouterData,
-//     },
-// };
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum Currency {
@@ -265,7 +240,7 @@ impl TryFrom<&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, Payments
             .to_owned()
             .and_then(|mandate_ids| mandate_ids.mandate_reference_id)
         {
-            Some(mandate_ref) => Err(hyperswitch_interfaces::errors::ConnectorError::NotImplemented("payment_method".into())),
+            Some(_mandate_ref) => Err(hyperswitch_interfaces::errors::ConnectorError::NotImplemented("payment_method".into())),
             None => match item.router_data.request.payment_method_data {
                 PaymentMethodData::Card(ref card) => AdyenPaymentRequest::try_from((item, card)),
                 | PaymentMethodData::Wallet(_)
@@ -289,43 +264,6 @@ impl TryFrom<&AdyenRouterData<&RouterDataV2<Authorize, PaymentFlowData, Payments
         }
     }
 }
-
-
-
-// impl TryFrom<&AdyenRouterData<&PaymentsAuthorizeRouterData>> for AdyenPaymentRequest {
-//     type Error = ConnectorError;
-//     fn try_from(item: &AdyenRouterData<&PaymentsAuthorizeRouterData>) -> Result<Self, Self::Error> {
-//         match item
-//             .router_data
-//             .request
-//             .mandate_id
-//             .to_owned()
-//             .and_then(|mandate_ids| mandate_ids.mandate_reference_id)
-//         {
-//             Some(mandate_ref) => Err(ConnectorError::NotImplemented)?,
-//             None => match item.router_data.request.payment_method_data {
-//                 PaymentMethodData::Card(ref card) => AdyenPaymentRequest::try_from((item, card)),
-//                 | PaymentMethodData::Wallet(_)
-//                 | PaymentMethodData::PayLater(_)
-//                 | PaymentMethodData::BankRedirect(_)
-//                 | PaymentMethodData::BankDebit(_)
-//                 | PaymentMethodData::BankTransfer(_)
-//                 | PaymentMethodData::CardRedirect(_)
-//                 | PaymentMethodData::Voucher(_)
-//                 | PaymentMethodData::GiftCard(_)
-//                 | PaymentMethodData::Crypto(_)
-//                 | PaymentMethodData::MandatePayment
-//                 | PaymentMethodData::Reward
-//                 | PaymentMethodData::RealTimePayment(_)
-//                 | PaymentMethodData::Upi(_)
-//                 | PaymentMethodData::OpenBanking(_)
-//                 | PaymentMethodData::CardToken(_) => {
-//                     Err(ConnectorError::NotImplemented)?
-//                 }
-//             },
-//         }
-//     }
-// }
 
 pub struct ResponseRouterData<Flow, R, Request, Response> {
     pub response: R,
@@ -358,15 +296,6 @@ pub enum AdyenStatus {
     RedirectShopper,
     Refused,
     PresentToShopper,
-    #[cfg(feature = "payouts")]
-    #[serde(rename = "[payout-confirm-received]")]
-    PayoutConfirmReceived,
-    #[cfg(feature = "payouts")]
-    #[serde(rename = "[payout-decline-received]")]
-    PayoutDeclineReceived,
-    #[cfg(feature = "payouts")]
-    #[serde(rename = "[payout-submit-received]")]
-    PayoutSubmitReceived,
 }
 
 
@@ -401,7 +330,7 @@ pub trait ForeignTryFrom<F>: Sized {
 fn get_adyen_payment_status(
     is_manual_capture: bool,
     adyen_status: AdyenStatus,
-    pmt: Option<hyperswitch_api_models::enums::PaymentMethodType>,
+    _pmt: Option<hyperswitch_api_models::enums::PaymentMethodType>,
 ) -> AttemptStatus {
     match adyen_status {
         AdyenStatus::AuthenticationFinished => {
@@ -421,12 +350,6 @@ fn get_adyen_payment_status(
         | AdyenStatus::PresentToShopper => AttemptStatus::AuthenticationPending,
         AdyenStatus::Error | AdyenStatus::Refused => AttemptStatus::Failure,
         AdyenStatus::Pending => AttemptStatus::Pending,
-        #[cfg(feature = "payouts")]
-        AdyenStatus::PayoutConfirmReceived => AttemptStatus::Started,
-        #[cfg(feature = "payouts")]
-        AdyenStatus::PayoutSubmitReceived => AttemptStatus::Pending,
-        #[cfg(feature = "payouts")]
-        AdyenStatus::PayoutDeclineReceived => AttemptStatus::Voided,
     }
 }
 
@@ -442,7 +365,7 @@ impl
 {
     type Error = hyperswitch_interfaces::errors::ConnectorError;
     fn foreign_try_from(
-        (response, data, http_code, capture_method, is_multiple_capture_psync_flow, pmt): (
+        (response, data, _http_code, _capture_method, _is_multiple_capture_psync_flow, pmt): (
             AdyenPaymentResponse,
             RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
             u16,
@@ -452,7 +375,7 @@ impl
         ),
     ) -> Result<Self, Self::Error> {
         let is_manual_capture = false;
-        let status = get_adyen_payment_status(is_manual_capture,response.result_code,pmt);
+        let _status = get_adyen_payment_status(is_manual_capture,response.result_code,pmt);
         let payment_response_data = PaymentsResponseData::TransactionResponse {
             resource_id: ResponseId::ConnectorTransactionId(response.psp_reference),
             redirection_data: None,
