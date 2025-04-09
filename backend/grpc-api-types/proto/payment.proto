@@ -53,6 +53,8 @@ message PaymentsAuthorizeResponse {
   optional string connector_response_reference_id = 6;
   optional bool incremental_authorization_allowed = 7;
   AttemptStatus status = 8;
+  optional string error_code = 9;
+  optional string error_message = 10;
 }
 
 message PaymentsSyncRequest {

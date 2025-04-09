@@ -30,7 +30,7 @@ pub fn setup(
 
         let console_filter = get_envfilter(
             config.console.filtering_directive.as_ref(),
-            config::Level(tracing::Level::WARN),
+            config::Level(tracing::Level::INFO),
             config.console.level,
             &crates_to_filter,
         );

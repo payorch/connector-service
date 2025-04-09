@@ -808,8 +808,10 @@ pub fn generate_payment_authorize_response(
                     network_txn_id,
                     connector_response_reference_id,
                     incremental_authorization_allowed,
-                    status: 19,
+                    status: 7,
                     mandate_reference: None, //TODO
+                    error_message: None,
+                    error_code: None,
                 }
             },
             _ => Err(
@@ -820,13 +822,21 @@ pub fn generate_payment_authorize_response(
                     error_object: None,
                 }))?,
         },
-        Err(err) => Err(
-            ApplicationErrorResponse::BadRequest(ApiError {
-                sub_code: err.code,
-                error_identifier: 400,
-                error_message: err.message,
-                error_object: None,
-            }))?,
+        Err(err) => {
+            PaymentsAuthorizeResponse {
+                resource_id:  Some(grpc_api_types::payments::ResponseId {
+                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(false)),
+                }),
+                redirection_data: None,
+                mandate_reference: None,
+                network_txn_id: None,
+                connector_response_reference_id: err.connector_transaction_id,
+                incremental_authorization_allowed: None,
+                status: 20,
+                error_message: Some(err.message),
+                error_code: Some(err.code),
+            }
+        }
     };
     Ok(response)
 }

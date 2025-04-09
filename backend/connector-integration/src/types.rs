@@ -1,4 +1,5 @@
-use hyperswitch_interfaces::api::{ConnectorCommon, payments_v2::PaymentAuthorizeV2, payments_v2::PaymentSyncV2};
+use hyperswitch_interfaces::api::{ConnectorCommon, payments_v2::PaymentAuthorizeV2};
+use crate::connectors::Adyen;
 
 #[derive(Clone, Debug)]
 pub enum ConnectorEnum {
@@ -9,7 +10,7 @@ pub enum ConnectorEnum {
 pub trait ConnectorServiceTrait:
     ConnectorCommon
     + PaymentAuthorizeV2
-    + PaymentSyncV2
+    // + PaymentSyncV2
 {
 }
 
@@ -33,12 +34,11 @@ impl ConnectorData {
     }
 
     fn convert_connector(
-        _connector_name: ConnectorEnum,
+        connector_name: ConnectorEnum,
     ) -> BoxedConnector {
-        todo!()
-        // match connector_name {
-        //     ConnectorEnum::Adyen => Ok(Box::new(Adyen::new())),
-        //     ConnectorEnum::Razorpay => Ok(Box::new(Razorpay::new())),
-        // }
+        match connector_name {
+            ConnectorEnum::Adyen => Box::new(Adyen::new()),
+            ConnectorEnum::Razorpay => todo!(),
+        }
     }
 }
