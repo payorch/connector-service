@@ -4,6 +4,15 @@ use serde::Serialize;
 
 use crate::{consts, error};
 
+/// Trait for converting from one foreign type to another
+pub trait ForeignTryFrom<F>: Sized {
+    /// Custom error for conversion failure
+    type Error;
+
+    /// Convert from a foreign type to the current type and return an error if the conversion fails
+    fn foreign_try_from(from: F) -> Result<Self, Self::Error>;
+}
+
 /// Record the header's fields in request's trace
 pub fn record_fields_from_header<B: hyper::body::Body>(request: &Request<B>) -> tracing::Span {
     let url_path = request.uri().path();

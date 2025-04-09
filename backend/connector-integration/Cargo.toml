@@ -4,3 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hyperswitch_interfaces = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4"}

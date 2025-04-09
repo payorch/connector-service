@@ -1,0 +1,832 @@
+use std::{collections::HashMap, str::FromStr};
+
+use error_stack::{report, ResultExt};
+use external_services::errors::{ApplicationErrorResponse, ApiError};
+use connector_integration as connector_integration_service;
+use grpc_api_types::payments::{PaymentsAuthorizeRequest, PaymentsAuthorizeResponse};
+use hyperswitch_domain_models::{payment_method_data::PaymentMethodData, router_data::ConnectorAuthType, router_data_v2::{PaymentFlowData, RouterDataV2}, router_flow_types::Authorize, router_request_types::{PaymentsAuthorizeData, ResponseId}, router_response_types::PaymentsResponseData};
+use crate::utils::ForeignTryFrom;
+
+impl ForeignTryFrom<i32> for connector_integration_service::types::ConnectorEnum {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(connector: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+        match connector {
+            2 => Ok(Self::Adyen),
+            68 => Ok(Self::Razorpay),
+            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_CONNECTOR".to_owned(),
+                error_identifier: 401,
+                error_message: format!("Invalid value for authenticate_by: {}", connector),
+                error_object: None,
+            }).into()),
+        }
+    }
+}
+
+impl ForeignTryFrom<i32> for hyperswitch_common_enums::CardNetwork {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(connector: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+        match connector {
+            0 => Ok(Self::Visa),
+            1 => Ok(Self::Mastercard),
+            2 => Ok(Self::AmericanExpress),
+            3 => Ok(Self::JCB),
+            4 => Ok(Self::DinersClub),
+            5 => Ok(Self::Discover),
+            6 => Ok(Self::CartesBancaires),
+            7 => Ok(Self::UnionPay),
+            8 => Ok(Self::RuPay),
+            9 => Ok(Self::Maestro),
+            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_CARD_NETWORK".to_owned(),
+                error_identifier: 401,
+                error_message: format!("Invalid value for card network: {}", connector),
+                error_object: None,
+            }).into()),
+        }
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::PaymentMethodData> for PaymentMethodData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(value: grpc_api_types::payments::PaymentMethodData) -> Result<Self, error_stack::Report<Self::Error>> {
+        match value.data {
+            Some(data) => match data {
+                grpc_api_types::payments::payment_method_data::Data::Card(card) => {
+                    Ok(PaymentMethodData::Card(
+                        hyperswitch_domain_models::payment_method_data::Card {
+                            card_number: hyperswitch_cards::CardNumber::from_str(&card.card_number)
+                                .change_context(
+                                    ApplicationErrorResponse::BadRequest(ApiError {
+                                        sub_code: "INVALID_CARD_NUMBER".to_owned(),
+                                        error_identifier: 400,
+                                        error_message: "Invalid card number".to_owned(),
+                                        error_object: None,
+                                    }),
+                                )?,
+                            card_exp_month: card.card_exp_month.into(),
+                            card_exp_year: card.card_exp_year.into(),
+                            card_cvc: card.card_cvc.into(),
+                            card_issuer: card.card_issuer,
+                            card_network: card.card_network.map(|network| {
+                                hyperswitch_common_enums::CardNetwork::foreign_try_from(network)
+                                .change_context(
+                                    ApplicationErrorResponse::BadRequest(ApiError {
+                                        sub_code: "INVALID_CARD_NETWORK".to_owned(),
+                                        error_identifier: 400,
+                                        error_message: "Invalid card network".to_owned(),
+                                        error_object: None,
+                                    }),
+                                )
+                            }).transpose()?,
+                            card_type: card.card_type,
+                            card_issuing_country: card.card_issuing_country,
+                            bank_code: card.bank_code,
+                            nick_name: card.nick_name.map(|name| name.into()),
+                        }
+                    ))
+                },
+            },
+            None => {
+                return Err(ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Payment method data is required".to_owned(),
+                    error_object: None,
+                }).into());
+            }
+        }
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::Currency> for hyperswitch_common_enums::Currency {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: grpc_api_types::payments::Currency) -> Result<Self, error_stack::Report<Self::Error>> {
+        match value {
+            grpc_api_types::payments::Currency::Aed => Ok(Self::AED),
+            grpc_api_types::payments::Currency::All => Ok(Self::ALL),
+            grpc_api_types::payments::Currency::Amd => Ok(Self::AMD),
+            grpc_api_types::payments::Currency::Ang => Ok(Self::ANG),
+            grpc_api_types::payments::Currency::Aoa => Ok(Self::AOA),
+            grpc_api_types::payments::Currency::Ars => Ok(Self::ARS),
+            grpc_api_types::payments::Currency::Aud => Ok(Self::AUD),
+            grpc_api_types::payments::Currency::Awg => Ok(Self::AWG),
+            grpc_api_types::payments::Currency::Azn => Ok(Self::AZN),
+            grpc_api_types::payments::Currency::Bam => Ok(Self::BAM),
+            grpc_api_types::payments::Currency::Bbd => Ok(Self::BBD),
+            grpc_api_types::payments::Currency::Bdt => Ok(Self::BDT),
+            grpc_api_types::payments::Currency::Bgn => Ok(Self::BGN),
+            grpc_api_types::payments::Currency::Bhd => Ok(Self::BHD),
+            grpc_api_types::payments::Currency::Bif => Ok(Self::BIF),
+            grpc_api_types::payments::Currency::Bmd => Ok(Self::BMD),
+            grpc_api_types::payments::Currency::Bnd => Ok(Self::BND),
+            grpc_api_types::payments::Currency::Bob => Ok(Self::BOB),
+            grpc_api_types::payments::Currency::Brl => Ok(Self::BRL),
+            grpc_api_types::payments::Currency::Bsd => Ok(Self::BSD),
+            grpc_api_types::payments::Currency::Bwp => Ok(Self::BWP),
+            grpc_api_types::payments::Currency::Byn => Ok(Self::BYN),
+            grpc_api_types::payments::Currency::Bzd => Ok(Self::BZD),
+            grpc_api_types::payments::Currency::Cad => Ok(Self::CAD),
+            grpc_api_types::payments::Currency::Chf => Ok(Self::CHF),
+            grpc_api_types::payments::Currency::Clp => Ok(Self::CLP),
+            grpc_api_types::payments::Currency::Cny => Ok(Self::CNY),
+            grpc_api_types::payments::Currency::Cop => Ok(Self::COP),
+            grpc_api_types::payments::Currency::Crc => Ok(Self::CRC),
+            grpc_api_types::payments::Currency::Cup => Ok(Self::CUP),
+            grpc_api_types::payments::Currency::Cve => Ok(Self::CVE),
+            grpc_api_types::payments::Currency::Czk => Ok(Self::CZK),
+            grpc_api_types::payments::Currency::Djf => Ok(Self::DJF),
+            grpc_api_types::payments::Currency::Dkk => Ok(Self::DKK),
+            grpc_api_types::payments::Currency::Dop => Ok(Self::DOP),
+            grpc_api_types::payments::Currency::Dzd => Ok(Self::DZD),
+            grpc_api_types::payments::Currency::Egp => Ok(Self::EGP),
+            grpc_api_types::payments::Currency::Etb => Ok(Self::ETB),
+            grpc_api_types::payments::Currency::Eur => Ok(Self::EUR),
+            grpc_api_types::payments::Currency::Fjd => Ok(Self::FJD),
+            grpc_api_types::payments::Currency::Fkp => Ok(Self::FKP),
+            grpc_api_types::payments::Currency::Gbp => Ok(Self::GBP),
+            grpc_api_types::payments::Currency::Gel => Ok(Self::GEL),
+            grpc_api_types::payments::Currency::Ghs => Ok(Self::GHS),
+            grpc_api_types::payments::Currency::Gip => Ok(Self::GIP),
+            grpc_api_types::payments::Currency::Gmd => Ok(Self::GMD),
+            grpc_api_types::payments::Currency::Gnf => Ok(Self::GNF),
+            grpc_api_types::payments::Currency::Gtq => Ok(Self::GTQ),
+            grpc_api_types::payments::Currency::Gyd => Ok(Self::GYD),
+            grpc_api_types::payments::Currency::Hkd => Ok(Self::HKD),
+            grpc_api_types::payments::Currency::Hnl => Ok(Self::HNL),
+            grpc_api_types::payments::Currency::Hrk => Ok(Self::HRK),
+            grpc_api_types::payments::Currency::Htg => Ok(Self::HTG),
+            grpc_api_types::payments::Currency::Huf => Ok(Self::HUF),
+            grpc_api_types::payments::Currency::Idr => Ok(Self::IDR),
+            grpc_api_types::payments::Currency::Ils => Ok(Self::ILS),
+            grpc_api_types::payments::Currency::Inr => Ok(Self::INR),
+            grpc_api_types::payments::Currency::Iqd => Ok(Self::IQD),
+            grpc_api_types::payments::Currency::Jmd => Ok(Self::JMD),
+            grpc_api_types::payments::Currency::Jod => Ok(Self::JOD),
+            grpc_api_types::payments::Currency::Jpy => Ok(Self::JPY),
+            grpc_api_types::payments::Currency::Kes => Ok(Self::KES),
+            grpc_api_types::payments::Currency::Kgs => Ok(Self::KGS),
+            grpc_api_types::payments::Currency::Khr => Ok(Self::KHR),
+            grpc_api_types::payments::Currency::Kmf => Ok(Self::KMF),
+            grpc_api_types::payments::Currency::Krw => Ok(Self::KRW),
+            grpc_api_types::payments::Currency::Kwd => Ok(Self::KWD),
+            grpc_api_types::payments::Currency::Kyd => Ok(Self::KYD),
+            grpc_api_types::payments::Currency::Kzt => Ok(Self::KZT),
+            grpc_api_types::payments::Currency::Lak => Ok(Self::LAK),
+            grpc_api_types::payments::Currency::Lbp => Ok(Self::LBP),
+            grpc_api_types::payments::Currency::Lkr => Ok(Self::LKR),
+            grpc_api_types::payments::Currency::Lrd => Ok(Self::LRD),
+            grpc_api_types::payments::Currency::Lsl => Ok(Self::LSL),
+            grpc_api_types::payments::Currency::Lyd => Ok(Self::LYD),
+            grpc_api_types::payments::Currency::Mad => Ok(Self::MAD),
+            grpc_api_types::payments::Currency::Mdl => Ok(Self::MDL),
+            grpc_api_types::payments::Currency::Mga => Ok(Self::MGA),
+            grpc_api_types::payments::Currency::Mkd => Ok(Self::MKD),
+            grpc_api_types::payments::Currency::Mmk => Ok(Self::MMK),
+            grpc_api_types::payments::Currency::Mnt => Ok(Self::MNT),
+            grpc_api_types::payments::Currency::Mop => Ok(Self::MOP),
+            grpc_api_types::payments::Currency::Mru => Ok(Self::MRU),
+            grpc_api_types::payments::Currency::Mur => Ok(Self::MUR),
+            grpc_api_types::payments::Currency::Mvr => Ok(Self::MVR),
+            grpc_api_types::payments::Currency::Mwk => Ok(Self::MWK),
+            grpc_api_types::payments::Currency::Mxn => Ok(Self::MXN),
+            grpc_api_types::payments::Currency::Myr => Ok(Self::MYR),
+            grpc_api_types::payments::Currency::Mzn => Ok(Self::MZN),
+            grpc_api_types::payments::Currency::Nad => Ok(Self::NAD),
+            grpc_api_types::payments::Currency::Ngn => Ok(Self::NGN),
+            grpc_api_types::payments::Currency::Nio => Ok(Self::NIO),
+            grpc_api_types::payments::Currency::Nok => Ok(Self::NOK),
+            grpc_api_types::payments::Currency::Npr => Ok(Self::NPR),
+            grpc_api_types::payments::Currency::Nzd => Ok(Self::NZD),
+            grpc_api_types::payments::Currency::Omr => Ok(Self::OMR),
+            grpc_api_types::payments::Currency::Pab => Ok(Self::PAB),
+            grpc_api_types::payments::Currency::Pen => Ok(Self::PEN),
+            grpc_api_types::payments::Currency::Pgk => Ok(Self::PGK),
+            grpc_api_types::payments::Currency::Php => Ok(Self::PHP),
+            grpc_api_types::payments::Currency::Pkr => Ok(Self::PKR),
+            grpc_api_types::payments::Currency::Pln => Ok(Self::PLN),
+            grpc_api_types::payments::Currency::Pyg => Ok(Self::PYG),
+            grpc_api_types::payments::Currency::Qar => Ok(Self::QAR),
+            grpc_api_types::payments::Currency::Ron => Ok(Self::RON),
+            grpc_api_types::payments::Currency::Rsd => Ok(Self::RSD),
+            grpc_api_types::payments::Currency::Rub => Ok(Self::RUB),
+            grpc_api_types::payments::Currency::Rwf => Ok(Self::RWF),
+            grpc_api_types::payments::Currency::Sar => Ok(Self::SAR),
+            grpc_api_types::payments::Currency::Sbd => Ok(Self::SBD),
+            grpc_api_types::payments::Currency::Scr => Ok(Self::SCR),
+            grpc_api_types::payments::Currency::Sek => Ok(Self::SEK),
+            grpc_api_types::payments::Currency::Sgd => Ok(Self::SGD),
+            grpc_api_types::payments::Currency::Shp => Ok(Self::SHP),
+            grpc_api_types::payments::Currency::Sle => Ok(Self::SLE),
+            grpc_api_types::payments::Currency::Sll => Ok(Self::SLL),
+            grpc_api_types::payments::Currency::Sos => Ok(Self::SOS),
+            grpc_api_types::payments::Currency::Srd => Ok(Self::SRD),
+            grpc_api_types::payments::Currency::Ssp => Ok(Self::SSP),
+            grpc_api_types::payments::Currency::Stn => Ok(Self::STN),
+            grpc_api_types::payments::Currency::Svc => Ok(Self::SVC),
+            grpc_api_types::payments::Currency::Szl => Ok(Self::SZL),
+            grpc_api_types::payments::Currency::Thb => Ok(Self::THB),
+            grpc_api_types::payments::Currency::Tnd => Ok(Self::TND),
+            grpc_api_types::payments::Currency::Top => Ok(Self::TOP),
+            grpc_api_types::payments::Currency::Try => Ok(Self::TRY),
+            grpc_api_types::payments::Currency::Ttd => Ok(Self::TTD),
+            grpc_api_types::payments::Currency::Twd => Ok(Self::TWD),
+            grpc_api_types::payments::Currency::Tzs => Ok(Self::TZS),
+            grpc_api_types::payments::Currency::Uah => Ok(Self::UAH),
+            grpc_api_types::payments::Currency::Ugx => Ok(Self::UGX),
+            grpc_api_types::payments::Currency::Usd => Ok(Self::USD),
+            grpc_api_types::payments::Currency::Uyu => Ok(Self::UYU),
+            grpc_api_types::payments::Currency::Uzs => Ok(Self::UZS),
+            grpc_api_types::payments::Currency::Ves => Ok(Self::VES),
+            grpc_api_types::payments::Currency::Vnd => Ok(Self::VND),
+            grpc_api_types::payments::Currency::Vuv => Ok(Self::VUV),
+            grpc_api_types::payments::Currency::Wst => Ok(Self::WST),
+            grpc_api_types::payments::Currency::Xaf => Ok(Self::XAF),
+            grpc_api_types::payments::Currency::Xcd => Ok(Self::XCD),
+            grpc_api_types::payments::Currency::Xof => Ok(Self::XOF),
+            grpc_api_types::payments::Currency::Xpf => Ok(Self::XPF),
+            grpc_api_types::payments::Currency::Yer => Ok(Self::YER),
+            grpc_api_types::payments::Currency::Zar => Ok(Self::ZAR),
+            grpc_api_types::payments::Currency::Zmw => Ok(Self::ZMW),
+            _ => Err(report!(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "unsupported_currency".to_string(),
+                error_identifier: 4001,
+                error_message: format!("Currency {:?} is not supported", value),
+                error_object: None,
+            }))),
+        }
+    }
+}
+
+impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(value: PaymentsAuthorizeRequest) -> Result<Self,  error_stack::Report<Self::Error>> {
+        Ok(Self {
+            payment_method_data: PaymentMethodData::foreign_try_from(value
+                .clone()
+                .payment_method_data
+                .ok_or_else(|| ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Payment method data is required".to_owned(),
+                    error_object: None,
+                }))?)?,
+            amount: value.amount,
+            currency: hyperswitch_common_enums::Currency::foreign_try_from(value.currency())?,
+            confirm: true,
+            webhook_url: value.webhook_url,
+            browser_info: value.browser_info.map(
+                |info| hyperswitch_domain_models::router_request_types::BrowserInformation {
+                    color_depth: None,
+                    java_enabled: info.java_enabled,
+                    java_script_enabled: info.java_script_enabled,
+                    language: info.language,
+                    screen_height: info.screen_height,
+                    screen_width: info.screen_width,
+                    time_zone: info.time_zone,
+                    ip_address: None,
+                    accept_header: info.accept_header,
+                    user_agent: info.user_agent,
+                }
+            ),
+            payment_method_type: Some(hyperswitch_common_enums::PaymentMethodType::Credit), //TODO
+            minor_amount: hyperswitch_common_utils::types::MinorUnit::new(value.minor_amount),
+            email: None,
+            customer_name: None,
+            statement_descriptor_suffix: None,
+            statement_descriptor: None,
+            capture_method: None,
+            router_return_url: None,
+            complete_authorize_url: None,
+            setup_future_usage: None,
+            mandate_id: None,
+            off_session: None,
+            customer_acceptance: None,
+            setup_mandate_details: None,
+            order_details: None,
+            order_category: None,
+            session_token: None,
+            enrolled_for_3ds: false,
+            related_transaction_id: None,
+            payment_experience: None,
+            surcharge_details: None,
+            customer_id: None,
+            request_incremental_authorization: false,
+            metadata: None,
+            authentication_data: None,
+            charges: None,
+            merchant_order_reference_id: None,
+            integrity_object: None,
+        })
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::PaymentAddress> for hyperswitch_domain_models::payment_address::PaymentAddress {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: grpc_api_types::payments::PaymentAddress) -> Result<Self, error_stack::Report<Self::Error>> {
+        let shipping = match value.shipping {
+            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(address)?),
+            None => None,
+        };
+
+        let billing = match value.billing {
+            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(address)?),
+            None => None,
+        };
+
+        let payment_method_billing = match value.payment_method_billing {
+            Some(address) => Some(hyperswitch_api_models::payments::Address::foreign_try_from(address)?),
+            None => None,
+        };
+
+        Ok(Self::new(
+            shipping,
+            billing,
+            payment_method_billing,
+            Some(false), // should_unify_address set to false
+        ))
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::Address> for hyperswitch_api_models::payments::Address {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: grpc_api_types::payments::Address) -> Result<Self, error_stack::Report<Self::Error>> {
+        let email = match value.email {
+            Some(email) => Some(hyperswitch_common_utils::pii::Email::from_str(&email)
+            .change_context(
+                ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_EMAIL".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Invalid email".to_owned(),
+                    error_object: None,
+                }),
+            )?),
+            None => None,
+        };
+        Ok(Self {
+            address: match value.address {
+                Some(address_details) => Some(hyperswitch_api_models::payments::AddressDetails::foreign_try_from(address_details)?),
+                None => None,
+            },
+            phone: match value.phone {
+                Some(phone_details) => Some(hyperswitch_api_models::payments::PhoneDetails::foreign_try_from(phone_details)?),
+                None => None,
+            },
+            email,
+        })
+    }
+}
+
+impl ForeignTryFrom<i32> for hyperswitch_common_enums::CountryAlpha2 {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(value: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+        match value {
+            0 => Ok(Self::US),
+            1 => Ok(Self::AF),
+            2 => Ok(Self::AX),
+            3 => Ok(Self::AL),
+            4 => Ok(Self::DZ),
+            5 => Ok(Self::AS),
+            6 => Ok(Self::AD),
+            7 => Ok(Self::AO),
+            8 => Ok(Self::AI),
+            9 => Ok(Self::AQ),
+            10 => Ok(Self::AG),
+            11 => Ok(Self::AR),
+            12 => Ok(Self::AM),
+            13 => Ok(Self::AW),
+            14 => Ok(Self::AU),
+            15 => Ok(Self::AT),
+            16 => Ok(Self::AZ),
+            17 => Ok(Self::BS),
+            18 => Ok(Self::BH),
+            19 => Ok(Self::BD),
+            20 => Ok(Self::BB),
+            21 => Ok(Self::BY),
+            22 => Ok(Self::BE),
+            23 => Ok(Self::BZ),
+            24 => Ok(Self::BJ),
+            25 => Ok(Self::BM),
+            26 => Ok(Self::BT),
+            27 => Ok(Self::BO),
+            28 => Ok(Self::BQ),
+            29 => Ok(Self::BA),
+            30 => Ok(Self::BW),
+            31 => Ok(Self::BV),
+            32 => Ok(Self::BR),
+            33 => Ok(Self::IO),
+            34 => Ok(Self::BN),
+            35 => Ok(Self::BG),
+            36 => Ok(Self::BF),
+            37 => Ok(Self::BI),
+            38 => Ok(Self::KH),
+            39 => Ok(Self::CM),
+            40 => Ok(Self::CA),
+            41 => Ok(Self::CV),
+            42 => Ok(Self::KY),
+            43 => Ok(Self::CF),
+            44 => Ok(Self::TD),
+            45 => Ok(Self::CL),
+            46 => Ok(Self::CN),
+            47 => Ok(Self::CX),
+            48 => Ok(Self::CC),
+            49 => Ok(Self::CO),
+            50 => Ok(Self::KM),
+            51 => Ok(Self::CG),
+            52 => Ok(Self::CD),
+            53 => Ok(Self::CK),
+            54 => Ok(Self::CR),
+            55 => Ok(Self::CI),
+            56 => Ok(Self::HR),
+            57 => Ok(Self::CU),
+            58 => Ok(Self::CW),
+            59 => Ok(Self::CY),
+            60 => Ok(Self::CZ),
+            61 => Ok(Self::DK),
+            62 => Ok(Self::DJ),
+            63 => Ok(Self::DM),
+            64 => Ok(Self::DO),
+            65 => Ok(Self::EC),
+            66 => Ok(Self::EG),
+            67 => Ok(Self::SV),
+            68 => Ok(Self::GQ),
+            69 => Ok(Self::ER),
+            70 => Ok(Self::EE),
+            71 => Ok(Self::ET),
+            72 => Ok(Self::FK),
+            73 => Ok(Self::FO),
+            74 => Ok(Self::FJ),
+            75 => Ok(Self::FI),
+            76 => Ok(Self::FR),
+            77 => Ok(Self::GF),
+            78 => Ok(Self::PF),
+            79 => Ok(Self::TF),
+            80 => Ok(Self::GA),
+            81 => Ok(Self::GM),
+            82 => Ok(Self::GE),
+            83 => Ok(Self::DE),
+            84 => Ok(Self::GH),
+            85 => Ok(Self::GI),
+            86 => Ok(Self::GR),
+            87 => Ok(Self::GL),
+            88 => Ok(Self::GD),
+            89 => Ok(Self::GP),
+            90 => Ok(Self::GU),
+            91 => Ok(Self::GT),
+            92 => Ok(Self::GG),
+            93 => Ok(Self::GN),
+            94 => Ok(Self::GW),
+            95 => Ok(Self::GY),
+            96 => Ok(Self::HT),
+            97 => Ok(Self::HM),
+            98 => Ok(Self::VA),
+            99 => Ok(Self::HN),
+            100 => Ok(Self::HK),
+            101 => Ok(Self::HU),
+            102 => Ok(Self::IS),
+            103 => Ok(Self::IN),
+            104 => Ok(Self::ID),
+            105 => Ok(Self::IR),
+            106 => Ok(Self::IQ),
+            107 => Ok(Self::IE),
+            108 => Ok(Self::IM),
+            109 => Ok(Self::IL),
+            110 => Ok(Self::IT),
+            111 => Ok(Self::JM),
+            112 => Ok(Self::JP),
+            113 => Ok(Self::JE),
+            114 => Ok(Self::JO),
+            115 => Ok(Self::KZ),
+            116 => Ok(Self::KE),
+            117 => Ok(Self::KI),
+            118 => Ok(Self::KP),
+            119 => Ok(Self::KR),
+            120 => Ok(Self::KW),
+            121 => Ok(Self::KG),
+            122 => Ok(Self::LA),
+            123 => Ok(Self::LV),
+            124 => Ok(Self::LB),
+            125 => Ok(Self::LS),
+            126 => Ok(Self::LR),
+            127 => Ok(Self::LY),
+            128 => Ok(Self::LI),
+            129 => Ok(Self::LT),
+            130 => Ok(Self::LU),
+            131 => Ok(Self::MO),
+            132 => Ok(Self::MK),
+            133 => Ok(Self::MG),
+            134 => Ok(Self::MW),
+            135 => Ok(Self::MY),
+            136 => Ok(Self::MV),
+            137 => Ok(Self::ML),
+            138 => Ok(Self::MT),
+            139 => Ok(Self::MH),
+            140 => Ok(Self::MQ),
+            141 => Ok(Self::MR),
+            142 => Ok(Self::MU),
+            143 => Ok(Self::YT),
+            144 => Ok(Self::MX),
+            145 => Ok(Self::FM),
+            146 => Ok(Self::MD),
+            147 => Ok(Self::MC),
+            148 => Ok(Self::MN),
+            149 => Ok(Self::ME),
+            150 => Ok(Self::MS),
+            151 => Ok(Self::MA),
+            152 => Ok(Self::MZ),
+            153 => Ok(Self::MM),
+            154 => Ok(Self::NA),
+            155 => Ok(Self::NR),
+            156 => Ok(Self::NP),
+            157 => Ok(Self::NL),
+            158 => Ok(Self::NC),
+            159 => Ok(Self::NZ),
+            160 => Ok(Self::NI),
+            161 => Ok(Self::NE),
+            162 => Ok(Self::NG),
+            163 => Ok(Self::NU),
+            164 => Ok(Self::NF),
+            165 => Ok(Self::MP),
+            166 => Ok(Self::NO),
+            167 => Ok(Self::OM),
+            168 => Ok(Self::PK),
+            169 => Ok(Self::PW),
+            170 => Ok(Self::PS),
+            171 => Ok(Self::PA),
+            172 => Ok(Self::PG),
+            173 => Ok(Self::PY),
+            174 => Ok(Self::PE),
+            175 => Ok(Self::PH),
+            176 => Ok(Self::PN),
+            177 => Ok(Self::PL),
+            178 => Ok(Self::PT),
+            179 => Ok(Self::PR),
+            180 => Ok(Self::QA),
+            181 => Ok(Self::RE),
+            182 => Ok(Self::RO),
+            183 => Ok(Self::RU),
+            184 => Ok(Self::RW),
+            185 => Ok(Self::BL),
+            186 => Ok(Self::SH),
+            187 => Ok(Self::KN),
+            188 => Ok(Self::LC),
+            189 => Ok(Self::MF),
+            190 => Ok(Self::PM),
+            191 => Ok(Self::VC),
+            192 => Ok(Self::WS),
+            193 => Ok(Self::SM),
+            194 => Ok(Self::ST),
+            195 => Ok(Self::SA),
+            196 => Ok(Self::SN),
+            197 => Ok(Self::RS),
+            198 => Ok(Self::SC),
+            199 => Ok(Self::SL),
+            200 => Ok(Self::SG),
+            201 => Ok(Self::SX),
+            202 => Ok(Self::SK),
+            203 => Ok(Self::SI),
+            204 => Ok(Self::SB),
+            205 => Ok(Self::SO),
+            206 => Ok(Self::ZA),
+            207 => Ok(Self::GS),
+            208 => Ok(Self::SS),
+            209 => Ok(Self::ES),
+            210 => Ok(Self::LK),
+            211 => Ok(Self::SD),
+            212 => Ok(Self::SR),
+            213 => Ok(Self::SJ),
+            214 => Ok(Self::SZ),
+            215 => Ok(Self::SE),
+            216 => Ok(Self::CH),
+            217 => Ok(Self::SY),
+            218 => Ok(Self::TW),
+            219 => Ok(Self::TJ),
+            220 => Ok(Self::TZ),
+            221 => Ok(Self::TH),
+            222 => Ok(Self::TL),
+            223 => Ok(Self::TG),
+            224 => Ok(Self::TK),
+            225 => Ok(Self::TO),
+            226 => Ok(Self::TT),
+            227 => Ok(Self::TN),
+            228 => Ok(Self::TR),
+            229 => Ok(Self::TM),
+            230 => Ok(Self::TC),
+            231 => Ok(Self::TV),
+            232 => Ok(Self::UG),
+            233 => Ok(Self::UA),
+            234 => Ok(Self::AE),
+            235 => Ok(Self::GB),
+            236 => Ok(Self::UM),
+            237 => Ok(Self::UY),
+            238 => Ok(Self::UZ),
+            239 => Ok(Self::VU),
+            240 => Ok(Self::VE),
+            241 => Ok(Self::VN),
+            242 => Ok(Self::VG),
+            243 => Ok(Self::VI),
+            244 => Ok(Self::WF),
+            245 => Ok(Self::EH),
+            246 => Ok(Self::YE),
+            247 => Ok(Self::ZM),
+            248 => Ok(Self::ZW),
+            _ => Err(
+                ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_ADDRESS".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Address is required".to_owned(),
+                    error_object: None,
+                })
+            )?,
+        }
+    }
+}
+
+
+impl ForeignTryFrom<grpc_api_types::payments::AddressDetails> for hyperswitch_api_models::payments::AddressDetails {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: grpc_api_types::payments::AddressDetails) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(Self {
+            city: value.city,
+            country: value.country.map(|val| hyperswitch_common_enums::CountryAlpha2::foreign_try_from(val)).transpose()?,
+            line1: value.line1.map(|val| val.into()),
+            line2: value.line2.map(|val| val.into()),
+            line3: value.line3.map(|val| val.into()),
+            zip: value.zip.map(|val| val.into()),
+            state: value.state.map(|val| val.into()),
+            first_name: value.first_name.map(|val| val.into()),
+            last_name: value.last_name.map(|val| val.into()),
+        })
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::PhoneDetails> for hyperswitch_api_models::payments::PhoneDetails {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: grpc_api_types::payments::PhoneDetails) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(Self {
+            number: value.number.map(|number| number.into()),
+            country_code: value.country_code,
+        })
+    }
+}
+
+impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(value: PaymentsAuthorizeRequest) -> Result<Self,  error_stack::Report<Self::Error>> {
+
+        let address = match value.address {
+            Some(address) => hyperswitch_domain_models::payment_address::PaymentAddress::foreign_try_from(address)?,
+            None => return Err(
+                ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_ADDRESS".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Address is required".to_owned(),
+                    error_object: None,
+                })
+            )?,
+        };
+        Ok(Self {
+            merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
+            payment_id: "IRRELEVANT_PAYMENT_ID".to_string(),
+            attempt_id: "IRRELEVANT_ATTEMPT_ID".to_string(),
+            status: hyperswitch_common_enums::AttemptStatus::Pending,
+            payment_method: hyperswitch_common_enums::PaymentMethod::Card, //TODO
+            address,
+            auth_type: hyperswitch_common_enums::AuthenticationType::default(),
+            connector_request_reference_id: value.connector_request_reference_id,
+            customer_id: None,
+            connector_customer: None,
+            description: None,
+            return_url: None,
+            connector_meta_data: None,
+            amount_captured: None,
+            minor_amount_captured: None,
+            access_token: None,
+            session_token: None,
+            reference_id: None,
+            payment_method_token: None,
+            recurring_mandate_payment_data: None,
+            preprocessing_id: None,
+            payment_method_balance: None,
+            connector_api_version: None,
+            test_mode: None,
+            connector_http_status_code: None,
+            external_latency: None,
+            apple_pay_flow: None,
+            connector_response: None,
+            payment_method_status: None,
+        })
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::AuthType> for ConnectorAuthType {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: grpc_api_types::payments::AuthType) -> Result<Self,  error_stack::Report<Self::Error>> {
+        let auth_details = value.auth_details
+            .ok_or_else(|| ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
+                error_identifier: 400,
+                error_message: "Payment method data is required".to_owned(),
+                error_object: None,
+            }))?;
+        Ok(match auth_details {
+            grpc_api_types::payments::auth_type::AuthDetails::HeaderKey(header_key) => Self::HeaderKey { api_key: header_key.api_key.into() },
+            grpc_api_types::payments::auth_type::AuthDetails::BodyKey(body_key) => Self::BodyKey { api_key: body_key.api_key.into(), key1: body_key.key1.into() },
+            grpc_api_types::payments::auth_type::AuthDetails::SignatureKey(signature_key) => Self::SignatureKey { api_key: signature_key.api_key.into(), key1: signature_key.key1.into(), api_secret: signature_key.api_secret.into() },
+            grpc_api_types::payments::auth_type::AuthDetails::MultiAuthKey(multi_auth_key) => Self::MultiAuthKey { api_key: multi_auth_key.api_key.into(), key1: multi_auth_key.key1.into(), api_secret: multi_auth_key.key2.clone().into(), key2:  multi_auth_key.key2.into() },
+            grpc_api_types::payments::auth_type::AuthDetails::CertificateAuth(certificate_auth) => Self::CertificateAuth { certificate: certificate_auth.certificate.into(), private_key: certificate_auth.private_key.into() },
+            grpc_api_types::payments::auth_type::AuthDetails::NoKey(_) => Self::NoKey,
+        })
+    }
+}
+
+impl ForeignTryFrom<ResponseId> for grpc_api_types::payments::ResponseId {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(value: ResponseId) -> Result<Self,  error_stack::Report<Self::Error>> {
+        Ok(match value {
+            ResponseId::ConnectorTransactionId(id) => Self {
+                id: Some(grpc_api_types::payments::response_id::Id::ConnectorTransactionId(id.into())),
+            },
+            ResponseId::EncodedData(data) => Self {
+                id: Some(grpc_api_types::payments::response_id::Id::EncodedData(data.into())),
+            },
+            ResponseId::NoResponseId => Self {
+                id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(false)),
+            },
+        })
+    }
+}
+
+pub fn generate_payment_authorize_response(
+    router_data_v2: RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+) -> Result<PaymentsAuthorizeResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let transaction_response = router_data_v2.response;
+    let response = match transaction_response {
+        Ok(response) => match response {
+            PaymentsResponseData::TransactionResponse { resource_id, redirection_data, mandate_reference: _, connector_metadata: _, network_txn_id, connector_response_reference_id, incremental_authorization_allowed, charge_id: _ } => {
+                PaymentsAuthorizeResponse {
+                    resource_id: Some(grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)?),
+                    redirection_data: redirection_data.map(
+                        |form| {
+                            match form {
+                                hyperswitch_domain_models::router_response_types::RedirectForm::Form { endpoint, method: _, form_fields: _ } => {
+                                    Ok::<grpc_api_types::payments::RedirectForm, ApplicationErrorResponse>(grpc_api_types::payments::RedirectForm {
+                                        form_type: Some(grpc_api_types::payments::redirect_form::FormType::Form(
+                                            grpc_api_types::payments::FormData {
+                                                endpoint: endpoint.into(),
+                                                method: 0,
+                                                form_fields: HashMap::default(), //TODO
+                                            }
+                                        ))
+                                    })
+                                },
+                                hyperswitch_domain_models::router_response_types::RedirectForm::Html { html_data } => {
+                                    Ok(grpc_api_types::payments::RedirectForm {
+                                        form_type: Some(grpc_api_types::payments::redirect_form::FormType::Html(
+                                            grpc_api_types::payments::HtmlData {
+                                                html_data: html_data.into(),
+                                            }
+                                        ))
+                                    })
+                                },
+                                _ => Err(
+                                    ApplicationErrorResponse::BadRequest(ApiError {
+                                        sub_code: "INVALID_RESPONSE".to_owned(),
+                                        error_identifier: 400,
+                                        error_message: "Invalid response from connector".to_owned(),
+                                        error_object: None,
+                                    }))?,
+                            }
+                        }
+                    ).transpose()?,
+                    network_txn_id,
+                    connector_response_reference_id,
+                    incremental_authorization_allowed,
+                    status: 19,
+                    mandate_reference: None, //TODO
+                }
+            },
+            _ => Err(
+                ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_RESPONSE".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Invalid response from connector".to_owned(),
+                    error_object: None,
+                }))?,
+        },
+        Err(err) => Err(
+            ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: err.code,
+                error_identifier: 400,
+                error_message: err.message,
+                error_object: None,
+            }))?,
+    };
+    Ok(response)
+}

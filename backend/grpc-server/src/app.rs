@@ -1,6 +1,6 @@
 use crate::{configs, error::ConfigurationError, logger, metrics, utils};
 use axum::http;
-use grpc_api_types::health_check::health_server;
+use grpc_api_types::{health_check::health_server, payments::{payment_service_handler, payment_service_server}};
 use std::{future::Future, net};
 use tokio::{
     signal::unix::{signal, SignalKind},
@@ -82,6 +82,7 @@ pub async fn server_builder(config: configs::Config) -> Result<(), Configuration
 
 pub struct Service {
     health_check_service: crate::server::health_check::HealthCheck,
+    payments_service: crate::server::payments::Payments,
 }
 
 impl Service {
@@ -90,9 +91,10 @@ impl Service {
     /// Will panic either if database password, hash key isn't present in configs or unable to
     /// deserialize any of the above keys
     #[allow(clippy::expect_used)]
-    pub async fn new(_config: configs::Config) -> Self {
+    pub async fn new(config: configs::Config) -> Self {
         Self {
             health_check_service: crate::server::health_check::HealthCheck,
+            payments_service: crate::server::payments::Payments {config},
         }
     }
 
@@ -119,7 +121,8 @@ impl Service {
 
         let router = axum::Router::new()
             .layer(logging_layer)
-            .merge(health_handler(self.health_check_service));
+            .merge(health_handler(self.health_check_service))
+            .merge(payment_service_handler(self.payments_service));
 
         let listener = tokio::net::TcpListener::bind(socket).await?;
 
@@ -159,6 +162,7 @@ impl Service {
             .layer(logging_layer)
             .add_service(reflection_service)
             .add_service(health_server::HealthServer::new(self.health_check_service))
+            .add_service(payment_service_server::PaymentServiceServer::new(self.payments_service))
             .serve_with_shutdown(socket, shutdown_signal)
             .await?;
 

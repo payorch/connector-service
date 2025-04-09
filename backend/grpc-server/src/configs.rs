@@ -7,6 +7,7 @@ pub struct Config {
     pub server: Server,
     pub metrics: MetricsServer,
     pub log: Log,
+    pub proxy: external_services::service::Proxy,
 }
 
 #[derive(Clone, serde::Deserialize, Debug)]
