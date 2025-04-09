@@ -78,7 +78,7 @@ use hyperswitch_connectors::types::ResponseRouterData;
 use error_stack::{report, ResultExt};
 // use error_stack::{report, ResultExt};
 
-use transformers as adyen;
+use transformers::{self as adyen, ForeignTryFrom};
 
 #[cfg(feature = "payouts")]
 use crate::utils::PayoutsData as UtilsPayoutData;
@@ -233,7 +233,15 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
             .map_err(|_| errors::ConnectorError::ResponseDeserializationFailed)?;
 
         event_builder.map(|i| i.set_response_body(&response));
-        Ok(data.clone())
+        RouterDataV2::foreign_try_from((
+            response,
+            data.clone(),
+            res.status_code,
+            data.request.capture_method,
+            false,
+            data.request.payment_method_type,
+        ))
+        .change_context(errors::ConnectorError::ResponseHandlingFailed)
     }
 
     fn get_error_response_v2(
