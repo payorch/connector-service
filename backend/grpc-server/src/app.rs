@@ -199,7 +199,7 @@ pub async fn metrics_server_builder(config: configs::Config) -> Result<(), Confi
     axum::serve(listener, router.into_make_service())
         .with_graceful_shutdown(async {
             let output = tokio::signal::ctrl_c().await;
-            tracing::error!("shutting down: {:?}", output);
+            tracing::error!(?output, "shutting down");
         })
         .await?;
 

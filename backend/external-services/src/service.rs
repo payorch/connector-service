@@ -82,7 +82,7 @@ where
             },
             None => serde_json::Value::Null,
         };
-        tracing::info!("request of connector: {:?}", masked_request);
+        tracing::info!(request=?masked_request, "request of connector");
         masked_request
     });
 
@@ -102,7 +102,7 @@ where
                         )),
                     );
                 });
-            tracing::info!("response from connector: {:?}", response);
+            tracing::info!(?response, "response from connector");
             match response {
                 Ok(body) => {
                     tracing::Span::current().record("url", tracing::field::display(url));
