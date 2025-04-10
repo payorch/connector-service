@@ -5,3 +5,4 @@ members = [
     "backend/grpc-api-types",
     "backend/grpc-server",
 ]
+exclude = ["client-sdk/example-rs"]
