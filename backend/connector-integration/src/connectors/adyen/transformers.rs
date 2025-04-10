@@ -405,7 +405,7 @@ impl
         ),
     ) -> Result<Self, Self::Error> {
         let is_manual_capture = false;
-        let _status = get_adyen_payment_status(is_manual_capture, response.result_code, pmt);
+        let status = get_adyen_payment_status(is_manual_capture, response.result_code, pmt);
         let payment_response_data = PaymentsResponseData::TransactionResponse {
             resource_id: ResponseId::ConnectorTransactionId(response.psp_reference.clone()),
             redirection_data: None,
@@ -436,6 +436,10 @@ impl
 
         Ok(Self {
             response: error.map_or_else(|| Ok(payment_response_data), Err),
+            resource_common_data: PaymentFlowData {
+                status,
+                ..data.resource_common_data
+            },
             ..data
         })
     }

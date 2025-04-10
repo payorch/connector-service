@@ -1,5 +1,8 @@
 use crate::connectors::Adyen;
-use hyperswitch_interfaces::api::{payments_v2::PaymentAuthorizeV2, ConnectorCommon};
+use hyperswitch_interfaces::api::{
+    payments_v2::{PaymentAuthorizeV2, PaymentSyncV2},
+    ConnectorCommon,
+};
 
 #[derive(Clone, Debug)]
 pub enum ConnectorEnum {
@@ -7,9 +10,7 @@ pub enum ConnectorEnum {
     Razorpay,
 }
 
-pub trait ConnectorServiceTrait: ConnectorCommon + PaymentAuthorizeV2 // + PaymentSyncV2
-{
-}
+pub trait ConnectorServiceTrait: ConnectorCommon + PaymentAuthorizeV2 + PaymentSyncV2 {}
 
 pub type BoxedConnector = Box<&'static (dyn ConnectorServiceTrait + Sync)>;
 

@@ -70,6 +70,8 @@ message PaymentsSyncResponse {
   optional MandateReference mandate_reference = 3;
   optional string network_txn_id = 4;
   optional string connector_response_reference_id = 5;
+  optional string error_code = 9;
+  optional string error_message = 10;
 }
 
 // Add these new message and enum types

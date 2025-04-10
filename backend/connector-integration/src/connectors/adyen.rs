@@ -10,14 +10,18 @@ use hyperswitch_common_utils::{
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
     router_data_v2::{flow_common_types::PaymentFlowData, RouterDataV2},
-    router_flow_types::payments::Authorize,
-    router_request_types::PaymentsAuthorizeData,
+    router_flow_types::{payments::Authorize, PSync},
+    router_request_types::{PaymentsAuthorizeData, PaymentsSyncData},
     router_response_types::PaymentsResponseData,
 };
 
 use error_stack::ResultExt;
 use hyperswitch_interfaces::{
-    api::{self, payments_v2::PaymentAuthorizeV2, ConnectorCommon},
+    api::{
+        self,
+        payments_v2::{PaymentAuthorizeV2, PaymentSyncV2},
+        ConnectorCommon,
+    },
     configs::Connectors,
     connector_integration_v2::ConnectorIntegrationV2,
     errors,
@@ -37,6 +41,7 @@ pub(crate) mod headers {
 
 impl ConnectorServiceTrait for Adyen {}
 impl PaymentAuthorizeV2 for Adyen {}
+impl PaymentSyncV2 for Adyen {}
 
 #[derive(Clone)]
 pub struct Adyen {
@@ -193,4 +198,9 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
         self.build_error_response(res, event_builder)
     }
+}
+
+impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>
+    for Adyen
+{
 }

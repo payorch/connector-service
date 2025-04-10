@@ -1,10 +1,12 @@
 use std::{collections::HashMap, str::FromStr};
 
-use crate::utils::ForeignTryFrom;
+use crate::utils::{ForeignFrom, ForeignTryFrom};
 use connector_integration as connector_integration_service;
 use error_stack::{report, ResultExt};
 use external_services::errors::{ApiError, ApplicationErrorResponse};
-use grpc_api_types::payments::{PaymentsAuthorizeRequest, PaymentsAuthorizeResponse};
+use grpc_api_types::payments::{
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse,
+};
 use hyperswitch_domain_models::{
     payment_method_data::PaymentMethodData,
     router_data::ConnectorAuthType,
@@ -858,6 +860,8 @@ pub fn generate_payment_authorize_response(
     >,
 ) -> Result<PaymentsAuthorizeResponse, error_stack::Report<ApplicationErrorResponse>> {
     let transaction_response = router_data_v2.response;
+    let status = router_data_v2.resource_common_data.status;
+    let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
     let response = match transaction_response {
         Ok(response) => match response {
             PaymentsResponseData::TransactionResponse {
@@ -908,7 +912,7 @@ pub fn generate_payment_authorize_response(
                     network_txn_id,
                     connector_response_reference_id,
                     incremental_authorization_allowed,
-                    status: 7,
+                    status: grpc_status as i32,
                     mandate_reference: None, //TODO
                     error_message: None,
                     error_code: None,
@@ -921,21 +925,225 @@ pub fn generate_payment_authorize_response(
                 error_object: None,
             }))?,
         },
-        Err(err) => PaymentsAuthorizeResponse {
-            resource_id: Some(grpc_api_types::payments::ResponseId {
-                id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
-                    false,
-                )),
-            }),
-            redirection_data: None,
-            mandate_reference: None,
-            network_txn_id: None,
-            connector_response_reference_id: err.connector_transaction_id,
-            incremental_authorization_allowed: None,
-            status: 20,
-            error_message: Some(err.message),
-            error_code: Some(err.code),
-        },
+        Err(err) => {
+            let status = err
+                .attempt_status
+                .map(|val| grpc_api_types::payments::AttemptStatus::foreign_from(val))
+                .unwrap_or_default();
+            PaymentsAuthorizeResponse {
+                resource_id: Some(grpc_api_types::payments::ResponseId {
+                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                        false,
+                    )),
+                }),
+                redirection_data: None,
+                mandate_reference: None,
+                network_txn_id: None,
+                connector_response_reference_id: err.connector_transaction_id,
+                incremental_authorization_allowed: None,
+                status: status as i32,
+                error_message: Some(err.message),
+                error_code: Some(err.code),
+            }
+        }
     };
     Ok(response)
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest>
+    for hyperswitch_domain_models::router_request_types::PaymentsSyncData
+{
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::PaymentsSyncRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        // Create ResponseId from resource_id
+        let connector_transaction_id =
+            ResponseId::ConnectorTransactionId(value.resource_id.clone());
+
+        // Default currency to USD for now (you might want to get this from somewhere else)
+        let currency = hyperswitch_common_enums::Currency::USD;
+
+        // Default amount to 0
+        let amount = hyperswitch_common_utils::types::MinorUnit::new(0);
+
+        Ok(Self {
+            connector_transaction_id,
+            encoded_data: None,
+            capture_method: None,
+            connector_meta: None,
+            sync_type:
+                hyperswitch_domain_models::router_request_types::SyncRequestType::SinglePaymentSync,
+            mandate_id: None,
+            payment_method_type: None,
+            currency,
+            payment_experience: None,
+            amount,
+            integrity_object: None,
+        })
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentFlowData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::PaymentsSyncRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(Self {
+            merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
+            payment_id: "PAYMENT_ID".to_string(),
+            attempt_id: "ATTEMPT_ID".to_string(),
+            status: hyperswitch_common_enums::AttemptStatus::Pending,
+            payment_method: hyperswitch_common_enums::PaymentMethod::Card, // Default
+            address: hyperswitch_domain_models::payment_address::PaymentAddress::default(),
+            auth_type: hyperswitch_common_enums::AuthenticationType::default(),
+            connector_request_reference_id: value
+                .connector_request_reference_id
+                .unwrap_or_else(|| "default_reference_id".to_string()),
+            customer_id: None,
+            connector_customer: None,
+            description: None,
+            return_url: None,
+            connector_meta_data: None,
+            amount_captured: None,
+            minor_amount_captured: None,
+            access_token: None,
+            session_token: None,
+            reference_id: None,
+            payment_method_token: None,
+            recurring_mandate_payment_data: None,
+            preprocessing_id: None,
+            payment_method_balance: None,
+            connector_api_version: None,
+            test_mode: None,
+            connector_http_status_code: None,
+            external_latency: None,
+            apple_pay_flow: None,
+            connector_response: None,
+            payment_method_status: None,
+        })
+    }
+}
+
+impl ForeignFrom<hyperswitch_common_enums::AttemptStatus>
+    for grpc_api_types::payments::AttemptStatus
+{
+    fn foreign_from(status: hyperswitch_common_enums::AttemptStatus) -> Self {
+        let grpc_status = match status {
+            hyperswitch_common_enums::AttemptStatus::Charged => Self::Charged,
+            hyperswitch_common_enums::AttemptStatus::Pending => Self::Pending,
+            hyperswitch_common_enums::AttemptStatus::Failure => Self::Failure,
+            hyperswitch_common_enums::AttemptStatus::Authorized => Self::Authorized,
+            hyperswitch_common_enums::AttemptStatus::Started => Self::Started,
+            hyperswitch_common_enums::AttemptStatus::AuthenticationFailed => {
+                Self::AuthenticationFailed
+            }
+            hyperswitch_common_enums::AttemptStatus::AuthenticationPending => {
+                Self::AuthenticationPending
+            }
+            hyperswitch_common_enums::AttemptStatus::AuthenticationSuccessful => {
+                Self::AuthenticationSuccessful
+            }
+            hyperswitch_common_enums::AttemptStatus::Authorizing => Self::Authorizing,
+            hyperswitch_common_enums::AttemptStatus::CaptureInitiated => Self::CaptureInitiated,
+            hyperswitch_common_enums::AttemptStatus::CaptureFailed => Self::CaptureFailed,
+            hyperswitch_common_enums::AttemptStatus::VoidInitiated => Self::VoidInitiated,
+            hyperswitch_common_enums::AttemptStatus::VoidFailed => Self::VoidFailed,
+            hyperswitch_common_enums::AttemptStatus::Voided => Self::Voided,
+            hyperswitch_common_enums::AttemptStatus::Unresolved => Self::Unresolved,
+            hyperswitch_common_enums::AttemptStatus::PaymentMethodAwaited => {
+                Self::PaymentMethodAwaited
+            }
+            hyperswitch_common_enums::AttemptStatus::ConfirmationAwaited => {
+                Self::ConfirmationAwaited
+            }
+            hyperswitch_common_enums::AttemptStatus::DeviceDataCollectionPending => {
+                Self::DeviceDataCollectionPending
+            }
+            hyperswitch_common_enums::AttemptStatus::RouterDeclined => Self::RouterDeclined,
+            hyperswitch_common_enums::AttemptStatus::AuthorizationFailed => {
+                Self::AuthorizationFailed
+            }
+            hyperswitch_common_enums::AttemptStatus::CodInitiated => Self::CodInitiated,
+            hyperswitch_common_enums::AttemptStatus::AutoRefunded => Self::AutoRefunded,
+            hyperswitch_common_enums::AttemptStatus::PartialCharged => Self::PartialCharged,
+            hyperswitch_common_enums::AttemptStatus::PartialChargedAndChargeable => {
+                Self::PartialChargedAndChargeable
+            }
+        };
+        grpc_status
+    }
+}
+
+pub fn generate_payment_sync_response(
+    router_data_v2: RouterDataV2<
+        hyperswitch_domain_models::router_flow_types::PSync,
+        PaymentFlowData,
+        hyperswitch_domain_models::router_request_types::PaymentsSyncData,
+        PaymentsResponseData,
+    >,
+) -> Result<PaymentsSyncResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let transaction_response = router_data_v2.response;
+
+    match transaction_response {
+        Ok(response) => match response {
+            PaymentsResponseData::TransactionResponse {
+                resource_id,
+                redirection_data: _,
+                mandate_reference: _,
+                connector_metadata: _,
+                network_txn_id,
+                connector_response_reference_id,
+                incremental_authorization_allowed: _,
+                charge_id: _,
+            } => {
+                let status = router_data_v2.resource_common_data.status;
+                let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
+
+                let grpc_resource_id =
+                    grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)?;
+
+                let mandate_reference_grpc = None;
+
+                Ok(PaymentsSyncResponse {
+                    resource_id: Some(grpc_resource_id),
+                    status: grpc_status as i32,
+                    mandate_reference: mandate_reference_grpc,
+                    network_txn_id,
+                    connector_response_reference_id,
+                    error_code: None,
+                    error_message: None,
+                })
+            }
+            _ => Err(report!(ApplicationErrorResponse::InternalServerError(
+                ApiError {
+                    sub_code: "INVALID_RESPONSE_TYPE".to_owned(),
+                    error_identifier: 500,
+                    error_message: "Invalid response type received from connector".to_owned(),
+                    error_object: None,
+                }
+            ))),
+        },
+        Err(e) => {
+            let status = e
+                .attempt_status
+                .map(|val| grpc_api_types::payments::AttemptStatus::foreign_from(val))
+                .unwrap_or_default();
+            Ok(PaymentsSyncResponse {
+                resource_id: Some(grpc_api_types::payments::ResponseId {
+                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                        false,
+                    )),
+                }),
+                mandate_reference: None,
+                network_txn_id: None,
+                connector_response_reference_id: e.connector_transaction_id,
+                status: status as i32,
+                error_message: Some(e.message),
+                error_code: Some(e.code),
+            })
+        }
+    }
 }
