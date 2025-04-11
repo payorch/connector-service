@@ -6,10 +6,10 @@ import Data.Aeson (ToJSON, object, (.=))
 import Data.Aeson.Types (Value (..))
 import qualified Data.ByteString.Lazy.Char8 as L8
 import Network.HTTP.Simple
+import System.Environment (getEnv)
 
-
-paymentsAuthorizeRequest :: Value
-paymentsAuthorizeRequest =
+buildPaymentsAuthorizeRequest :: String -> String -> String -> Value
+buildPaymentsAuthorizeRequest apiKey key1 apiSecret =
     object
         [ "amount" .= Number 1000
         , "currency" .= (145 :: Int) -- USD
@@ -20,9 +20,9 @@ paymentsAuthorizeRequest =
                     .= object
                         [ "SignatureKey"
                             .= object
-                                [ "api_key" .= String "AQEqhmfxK43MaR1Hw0m/n3Q5qf3VYp5eHZJTfEA0SnT87rrwTHXDVGtJ+kfCEMFdWw2+5HzctViMSCJMYAc=-3z4LNx7vk7s3KOZ6PMgPPx2HKrP9XfzQWMxU0OtdxTc=-suZ%I8NM9qv+?up}"
-                                , "key1" .= String "JuspayDEECOM"
-                                , "api_secret" .= String "AQEzgmDBbd+uOlwd9n6PxDJo8rXOaKhCAINLVnwY7G24jmdSuuL0Salp1G0BJE6opzqZqP6rEMFdWw2+5HzctViMSCJMYAc=-bn/JeFXqIxxfhhy67PE2sTZctbqzqe+fU0JprcbCEmE=-:M><zzc+t9Ne#2eb"
+                                [ "api_key" .= apiKey
+                                , "key1" .= key1
+                                , "api_secret" .= apiSecret
                                 ]
                         ]
                 ]
@@ -63,5 +63,9 @@ paymentAuthorize host req = do
 main :: IO ()
 main = do
     let host = "http://localhost:8000"
-    response <- paymentAuthorize host paymentsAuthorizeRequest
+    apiKey <- getEnv "API_KEY"
+    key1 <- getEnv "KEY1"
+    apiSecret <- getEnv "API_SECRET"
+    let request = buildPaymentsAuthorizeRequest apiKey key1 apiSecret
+    response <- paymentAuthorize host request
     L8.putStrLn response
