@@ -32,7 +32,13 @@ use hyperswitch_masking::{Mask, Maskable};
 
 use transformers::{self as adyen, ForeignTryFrom};
 
-use crate::types::ConnectorServiceTrait;
+use crate::{
+    flow::CreateOrder,
+    types::{
+        ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
+        PaymentOrderCreate, ValidationTrait,
+    },
+};
 
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
@@ -202,5 +208,19 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
 impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>
     for Adyen
+{
+}
+
+impl ValidationTrait for Adyen {}
+
+impl PaymentOrderCreate for Adyen {}
+
+impl
+    ConnectorIntegrationV2<
+        CreateOrder,
+        PaymentFlowData,
+        PaymentCreateOrderData,
+        PaymentCreateOrderResponse,
+    > for Adyen
 {
 }

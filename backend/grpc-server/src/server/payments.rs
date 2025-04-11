@@ -1,5 +1,9 @@
 use crate::{configs::Config, domain_types::generate_payment_sync_response, utils::ForeignTryFrom};
-use connector_integration as connector_integration_service;
+use connector_integration::{
+    self as connector_integration_service,
+    flow::CreateOrder,
+    types::{ConnectorData, PaymentCreateOrderData, PaymentCreateOrderResponse},
+};
 use external_services;
 use grpc_api_types::{
     payments::payment_service_server::PaymentService,
@@ -20,6 +24,82 @@ use tracing::info;
 
 pub struct Payments {
     pub config: Config,
+}
+
+impl Payments {
+    async fn handle_order_creation(
+        &self,
+        connector_data: ConnectorData,
+        payment_flow_data: &mut PaymentFlowData,
+        connector_auth_details: ConnectorAuthType,
+        payload: &PaymentsAuthorizeRequest,
+    ) -> Result<(), tonic::Status> {
+        // Get connector integration
+        let connector_integration: BoxedConnectorIntegrationV2<
+            '_,
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        > = connector_data.connector.get_connector_integration_v2();
+
+        let currency =
+            match hyperswitch_common_enums::Currency::foreign_try_from(payload.currency()) {
+                Ok(currency) => currency,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid currency: {}",
+                        e
+                    )))
+                }
+            };
+
+        let order_create_data = PaymentCreateOrderData {
+            amount: hyperswitch_common_utils::types::MinorUnit::new(payload.minor_amount),
+            currency,
+        };
+
+        let order_router_data = RouterDataV2::<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        > {
+            flow: std::marker::PhantomData,
+            resource_common_data: payment_flow_data.clone(),
+            connector_auth_type: connector_auth_details,
+            request: order_create_data,
+            response: Err(ErrorResponse::default()),
+        };
+
+        // Execute connector processing
+        let response = match external_services::service::execute_connector_processing_step(
+            &self.config.proxy,
+            connector_integration,
+            order_router_data,
+        )
+        .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                return Err(tonic::Status::internal(format!(
+                    "Connector processing error: {}",
+                    e
+                )))
+            }
+        };
+
+        match response.response {
+            Ok(PaymentCreateOrderResponse { order_id, .. }) => {
+                payment_flow_data.reference_id = Some(order_id);
+                Ok(())
+            }
+            Err(ErrorResponse { message, .. }) => Err(tonic::Status::internal(format!(
+                "Order creation error: {}",
+                message
+            ))),
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -47,7 +127,7 @@ impl PaymentService for Payments {
 
         //get connector data
         let connector_data =
-            connector_integration_service::types::ConnectorData::get_connector_by_name(&connector);
+            ConnectorData::get_connector_by_name(&connector);
 
         // Get connector integration
         let connector_integration: BoxedConnectorIntegrationV2<
@@ -58,31 +138,19 @@ impl PaymentService for Payments {
             PaymentsResponseData,
         > = connector_data.connector.get_connector_integration_v2();
 
+        // Create common request data
+        let mut payment_flow_data = match PaymentFlowData::foreign_try_from(payload.clone()) {
+            Ok(data) => data,
+            Err(e) => {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid request data: {}",
+                    e
+                )))
+            }
+        };
+
         // Extract auth credentials
         let auth_creds = payload.auth_creds.clone();
-
-        // Create connector request data
-        let payment_authorize_data = match PaymentsAuthorizeData::foreign_try_from(payload.clone())
-        {
-            Ok(data) => data,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid request data: {}",
-                    e
-                )))
-            }
-        };
-
-        // Create common request data
-        let payment_flow_data = match PaymentFlowData::foreign_try_from(payload.clone()) {
-            Ok(data) => data,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid request data: {}",
-                    e
-                )))
-            }
-        };
 
         let auth_creds = match auth_creds {
             Some(auth_creds) => auth_creds,
@@ -98,6 +166,30 @@ impl PaymentService for Payments {
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(
                     "Invalid auth_creds in request: {}",
+                    e
+                )))
+            }
+        };
+
+        let should_do_order_create = connector_data.connector.should_do_order_create();
+
+        if should_do_order_create {
+            self.handle_order_creation(
+                connector_data.clone(),
+                &mut payment_flow_data,
+                connector_auth_details.clone(),
+                &payload,
+            )
+            .await?;
+        }
+
+        // Create connector request data
+        let payment_authorize_data = match PaymentsAuthorizeData::foreign_try_from(payload.clone())
+        {
+            Ok(data) => data,
+            Err(e) => {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid request data: {}",
                     e
                 )))
             }
@@ -172,7 +264,7 @@ impl PaymentService for Payments {
 
         // Get connector data
         let connector_data =
-            connector_integration_service::types::ConnectorData::get_connector_by_name(&connector);
+            ConnectorData::get_connector_by_name(&connector);
 
         // Get connector integration
         let connector_integration: BoxedConnectorIntegrationV2<
