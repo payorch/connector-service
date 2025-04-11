@@ -514,10 +514,11 @@ impl TryFrom<(&Card, Option<Secret<String>>)> for AdyenPaymentMethod {
     fn try_from(
         (card, card_holder_name): (&Card, Option<Secret<String>>),
     ) -> Result<Self, Self::Error> {
+        
         let adyen_card = AdyenCard {
             number: card.card_number.clone(),
             expiry_month: card.card_exp_month.clone(),
-            expiry_year: "2031".to_string().into(),
+            expiry_year: "2030".to_string().into(),
             cvc: Some(card.card_cvc.clone()),
             holder_name: card_holder_name,
             brand: Some(CardBrand::Visa),
@@ -559,7 +560,6 @@ impl
         );
         let (recurring_processing_model, store_payment_method, _) =
             get_recurring_processing_model(item.router_data)?;
-        let browser_info = get_browser_info(item.router_data)?;
         
         let return_url = item.router_data.request.router_return_url.clone().unwrap();
 
@@ -567,6 +567,8 @@ impl
             get_address_info(item.router_data.resource_common_data.address.get_payment_billing()).and_then(Result::ok);
 
         let card_holder_name = item.router_data.request.customer_name.clone();
+
+        let additional_data = get_additional_data(item.router_data);
         
         let payment_method = PaymentMethod::AdyenPaymentMethod(Box::new(
             AdyenPaymentMethod::try_from((card_data, card_holder_name))?,
@@ -580,8 +582,8 @@ impl
             return_url,
             shopper_interaction,
             recurring_processing_model,
-            browser_info,
-            additional_data: None,
+            browser_info: None,
+            additional_data,
             mpi_data: None,
             telephone_number: None,
             shopper_name: None,
@@ -1116,34 +1118,6 @@ fn is_mandate_payment(item: &RouterDataV2<
             .is_some()
 }
 
-fn get_browser_info(item: &RouterDataV2<
-    Authorize,
-    PaymentFlowData,
-    PaymentsAuthorizeData,
-    PaymentsResponseData,
->) -> Result<Option<AdyenBrowserInfo>, Error> {
-    if item.auth_type == hyperswitch_common_enums::enums::AuthenticationType::ThreeDs
-        || item.payment_method == hyperswitch_common_enums::enums::PaymentMethod::Card
-        || item.payment_method == hyperswitch_common_enums::enums::PaymentMethod::BankRedirect
-        || item.request.payment_method_type == Some(hyperswitch_common_enums::enums::PaymentMethodType::GoPay)
-        || item.request.payment_method_type == Some(hyperswitch_common_enums::enums::PaymentMethodType::GooglePay)
-    {
-        let info = item.request.browser_info.clone().unwrap();
-        Ok(Some(AdyenBrowserInfo {
-            accept_header: info.accept_header.unwrap(),
-            language: info.language.unwrap(),
-            screen_height: info.screen_height.unwrap(),
-            screen_width: info.screen_width.unwrap(),
-            color_depth: info.color_depth.unwrap(),
-            user_agent: info.user_agent.unwrap(),
-            time_zone_offset: info.time_zone.unwrap(),
-            java_enabled: info.java_enabled.unwrap(),
-        }))
-    } else {
-        Ok(None)
-    }
-}
-
 pub fn get_address_info(
     address: Option<&hyperswitch_api_models::payments::Address>,
 ) -> Option<Result<Address, error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>>> {
@@ -1161,5 +1135,138 @@ pub fn get_address_info(
             },
         )
     })
+}
+
+fn get_additional_data(item: &RouterDataV2<
+    Authorize,
+    PaymentFlowData,
+    PaymentsAuthorizeData,
+    PaymentsResponseData,
+>) -> Option<AdditionalData> {
+    let (authorisation_type, manual_capture) = match item.request.capture_method {
+        Some(hyperswitch_common_enums::enums::CaptureMethod::Manual) | Some(enums::CaptureMethod::ManualMultiple) => {
+            (Some(AuthType::PreAuth), Some("true".to_string()))
+        }
+        _ => (None, None),
+    };
+    let riskdata = item.request.metadata.clone().and_then(get_risk_data);
+
+    let execute_three_d = if matches!(item.resource_common_data.auth_type, hyperswitch_common_enums::enums::AuthenticationType::ThreeDs) {
+        Some("true".to_string())
+    } else {
+        None
+    };
+
+    if authorisation_type.is_none()
+        && manual_capture.is_none()
+        && execute_three_d.is_none()
+        && riskdata.is_none()
+    {
+        //without this if-condition when the above 3 values are None, additionalData will be serialized to JSON like this -> additionalData: {}
+        //returning None, ensures that additionalData key will not be present in the serialized JSON
+        None
+    } else {
+        Some(AdditionalData {
+            authorisation_type,
+            manual_capture,
+            execute_three_d,
+            network_tx_reference: None,
+            recurring_detail_reference: None,
+            recurring_shopper_reference: None,
+            recurring_processing_model: None,
+            riskdata,
+            ..AdditionalData::default()
+        })
+    }
+}
+
+pub fn get_risk_data(metadata: serde_json::Value) -> Option<RiskData> {
+    let item_i_d = get_str("riskdata.basket.item1.itemID", &metadata);
+    let product_title = get_str("riskdata.basket.item1.productTitle", &metadata);
+    let amount_per_item = get_str("riskdata.basket.item1.amountPerItem", &metadata);
+    let currency = get_str("riskdata.basket.item1.currency", &metadata);
+    let upc = get_str("riskdata.basket.item1.upc", &metadata);
+    let brand = get_str("riskdata.basket.item1.brand", &metadata);
+    let manufacturer = get_str("riskdata.basket.item1.manufacturer", &metadata);
+    let category = get_str("riskdata.basket.item1.category", &metadata);
+    let quantity = get_str("riskdata.basket.item1.quantity", &metadata);
+    let color = get_str("riskdata.basket.item1.color", &metadata);
+    let size = get_str("riskdata.basket.item1.size", &metadata);
+
+    let device_country = get_str("riskdata.deviceCountry", &metadata);
+    let house_numberor_name = get_str("riskdata.houseNumberorName", &metadata);
+    let account_creation_date = get_str("riskdata.accountCreationDate", &metadata);
+    let affiliate_channel = get_str("riskdata.affiliateChannel", &metadata);
+    let avg_order_value = get_str("riskdata.avgOrderValue", &metadata);
+    let delivery_method = get_str("riskdata.deliveryMethod", &metadata);
+    let email_name = get_str("riskdata.emailName", &metadata);
+    let email_domain = get_str("riskdata.emailDomain", &metadata);
+    let last_order_date = get_str("riskdata.lastOrderDate", &metadata);
+    let merchant_reference = get_str("riskdata.merchantReference", &metadata);
+    let payment_method = get_str("riskdata.paymentMethod", &metadata);
+    let promotion_name = get_str("riskdata.promotionName", &metadata);
+    let secondary_phone_number = get_str("riskdata.secondaryPhoneNumber", &metadata);
+    let timefrom_loginto_order = get_str("riskdata.timefromLogintoOrder", &metadata);
+    let total_session_time = get_str("riskdata.totalSessionTime", &metadata);
+    let total_authorized_amount_in_last30_days =
+        get_str("riskdata.totalAuthorizedAmountInLast30Days", &metadata);
+    let total_order_quantity = get_str("riskdata.totalOrderQuantity", &metadata);
+    let total_lifetime_value = get_str("riskdata.totalLifetimeValue", &metadata);
+    let visits_month = get_str("riskdata.visitsMonth", &metadata);
+    let visits_week = get_str("riskdata.visitsWeek", &metadata);
+    let visits_year = get_str("riskdata.visitsYear", &metadata);
+    let ship_to_name = get_str("riskdata.shipToName", &metadata);
+    let first8charactersof_address_line1_zip =
+        get_str("riskdata.first8charactersofAddressLine1Zip", &metadata);
+    let affiliate_order = get_bool("riskdata.affiliateOrder", &metadata);
+
+    Some(RiskData {
+        item_i_d,
+        product_title,
+        amount_per_item,
+        currency,
+        upc,
+        brand,
+        manufacturer,
+        category,
+        quantity,
+        color,
+        size,
+        device_country,
+        house_numberor_name,
+        account_creation_date,
+        affiliate_channel,
+        avg_order_value,
+        delivery_method,
+        email_name,
+        email_domain,
+        last_order_date,
+        merchant_reference,
+        payment_method,
+        promotion_name,
+        secondary_phone_number,
+        timefrom_loginto_order,
+        total_session_time,
+        total_authorized_amount_in_last30_days,
+        total_order_quantity,
+        total_lifetime_value,
+        visits_month,
+        visits_week,
+        visits_year,
+        ship_to_name,
+        first8charactersof_address_line1_zip,
+        affiliate_order,
+    })
+}
+
+fn get_str(key: &str, riskdata: &serde_json::Value) -> Option<String> {
+    riskdata
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+fn get_bool(key: &str, riskdata: &serde_json::Value) -> Option<bool> {
+    riskdata.get(key).and_then(|v| v.as_bool())
 }
 
