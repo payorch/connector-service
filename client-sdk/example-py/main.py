@@ -1,113 +1,140 @@
-#!/usr/bin/env python3
-"""
-gRPC client for PaymentService
-Usage: python main.py <host_url>
-"""
-
-import sys, os
 import grpc
-import logging
+import os
+import sys
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+sys.path.append("./generated")
+
+from payment_pb2 import (
+    PaymentsAuthorizeRequest,
+    PaymentsSyncRequest,
+    Card,
+    PaymentMethodData,
+    PaymentAddress,
+    AuthType,
+    BodyKey,
+    AuthenticationType,
+    PaymentsAuthorizeResponse,
+    PaymentsSyncResponse,
+    Currency,
+    Connector,
+    PaymentMethod,
+    BrowserInformation,
+)
+from payment_pb2_grpc import PaymentServiceStub
+from typing import Union
 
 
-cwd = os.getcwd()
-sys.path.append(cwd + "/generated")
-
-# We'll import these after code generation
-# from payments_pb2 import PaymentsAuthorizeRequest, Currency, Connector, AuthType, PaymentMethod
-# from payments_pb2 import PaymentMethodData, Card, PaymentAddress, AuthenticationType, SignatureKey
-# from payment_service_pb2_grpc import PaymentServiceStub
+def get_env_variable(var_name: str, default: str) -> str:
+    """Fetch an environment variable or return a default value."""
+    return os.getenv(var_name, default)
 
 
-def main():
-    # Get the URL from command line arguments
-    if len(sys.argv) < 2:
-        logger.error(f"Usage: {sys.argv[0]} <host_url>")
-        sys.exit(1)
-    
-    url = sys.argv[1]
-
-    # Import the generated modules
-    from payment_pb2 import (
-        PaymentsAuthorizeRequest, 
-        Currency, 
-        Connector, 
-        AuthType, 
-        PaymentMethod,
-        PaymentMethodData,
-        Card, 
-        PaymentAddress, 
-        AuthenticationType, 
-        SignatureKey
-    )
-    from payment_pb2_grpc import PaymentServiceStub
-    
+def make_payment_authorization_request(url: str) -> Union[PaymentsAuthorizeResponse, None]:
+    """Send a payment authorization request."""
     try:
-        # Create a gRPC channel and client
-        logger.info(f"Connecting to gRPC server at {url}")
         channel = grpc.insecure_channel(url)
         client = PaymentServiceStub(channel)
-        
-        # Create a payment method data object with card details
-        card = Card(
-            card_number="4111111111111111",
-            card_exp_month="03",
-            card_exp_year="2030",
-            card_cvc="737"
-        )
-        
-        # Create a payment method data object
-        payment_method_data = PaymentMethodData()
-        payment_method_data.card.CopyFrom(card)
-        
-        # Create signature key for auth credentials
-        signature_key = SignatureKey(
-            api_key="",
-            key1="",
-            api_secret=""
-        )
-        
-        # Create auth type with signature key
-        auth_creds = AuthType()
-        auth_creds.signature_key.CopyFrom(signature_key)
-        
-        # Create a payment address (empty in this case)
-        address = PaymentAddress()
-        
-        # Create the request
+
+        # Retrieve credentials from environment variables
+        api_key = get_env_variable("API_KEY", "default_api_key")
+        key1 = get_env_variable("KEY1", "default_key1")
+
+        # Create request with updated values
         request = PaymentsAuthorizeRequest(
             amount=1000,
             currency=Currency.USD,
-            connector=Connector.ADYEN,
-            auth_creds=auth_creds,
+            connector=Connector.RAZORPAY,
+            auth_creds=AuthType(
+                body_key=BodyKey(api_key=api_key, key1=key1)
+            ),
             payment_method=PaymentMethod.CARD,
-            payment_method_data=payment_method_data,
-            address=address,
+            payment_method_data=PaymentMethodData(
+                card=Card(
+                    card_number="5123456789012346",
+                    card_exp_month="03",
+                    card_exp_year="2030",
+                    card_cvc="100",
+                )
+            ),
+            address=PaymentAddress(),
             auth_type=AuthenticationType.THREE_DS,
             connector_request_reference_id="ref_12345",
             enrolled_for_3ds=True,
             request_incremental_authorization=False,
-            minor_amount=1000
+            minor_amount=1000,
+            email="example@example.com",
+            browser_info=BrowserInformation(
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+                accept_header="text/html,application/xhtml+xml",
+                language="en-US",
+                color_depth=24,
+                screen_height=1080,
+                screen_width=1920,
+                java_enabled=False,
+            ),
         )
-        
-        # Send the request
-        logger.info("Sending PaymentAuthorize request")
-        response = client.PaymentAuthorize(request)
-        
-        # Print the response
-        logger.info(f"Response: {response}")
-        
+
+        return client.PaymentAuthorize(request)
     except grpc.RpcError as e:
-        logger.error(f"RPC error: {e.code()}: {e.details()}")
+        print(f"RPC error: {e.code()}: {e.details()}", file=sys.stderr)
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        print(f"Error: {str(e)}", file=sys.stderr)
     finally:
         if 'channel' in locals():
             channel.close()
 
 
-if __name__ == '__main__':
+def make_payment_sync_request(url: str) -> Union[PaymentsSyncResponse, None]:
+    """Send a payment sync request."""
+    try:
+        channel = grpc.insecure_channel(url)
+        client = PaymentServiceStub(channel)
+
+        # Retrieve credentials from environment variables
+        api_key = get_env_variable("API_KEY", "default_api_key")
+        key1 = get_env_variable("KEY1", "default_key1")
+        resource_id = get_env_variable("RESOURCE_ID", "pay_QHj9Thiy5mCC4Y")
+
+        # Create the request
+        request = PaymentsSyncRequest(
+            connector=Connector.RAZORPAY,
+            auth_creds=AuthType(
+                body_key=BodyKey(api_key=api_key, key1=key1)
+            ),
+            resource_id=resource_id,
+            connector_request_reference_id="conn_req_abc",
+        )
+
+        return client.PaymentSync(request)
+    except grpc.RpcError as e:
+        print(f"RPC error: {e.code()}: {e.details()}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error: {str(e)}", file=sys.stderr)
+    finally:
+        if 'channel' in locals():
+            channel.close()
+
+
+def main():
+    """Main function to parse arguments and execute operations."""
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <url> [operation]", file=sys.stderr)
+        print("Operations: authorize, sync", file=sys.stderr)
+        sys.exit(1)
+
+    url = sys.argv[1]
+    operation = sys.argv[2] if len(sys.argv) > 2 else "authorize"
+
+    if operation == "authorize":
+        response = make_payment_authorization_request(url)
+        print(f"Authorization Response: {response}")
+    elif operation == "sync":
+        response = make_payment_sync_request(url)
+        print(f"Sync Response: {response}")
+    else:
+        print(f"Unknown operation: {operation}. Use 'authorize' or 'sync'.", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
     main()

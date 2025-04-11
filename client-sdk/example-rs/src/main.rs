@@ -1,42 +1,70 @@
 use grpc_api_types::payments::{self, payment_service_client::PaymentServiceClient};
+use std::error::Error;
+
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn Error>> {
     // Get the URL from command line arguments
     let args = std::env::args().collect::<Vec<_>>();
-    let url = args.get(1);
-    let url = match url {
-        Some(url) => url,
-        None => {
-            eprintln!("Usage: {} <url>", args[0]);
+    if args.len() < 2 {
+        eprintln!("Usage: {} <url> [operation]", args[0]);
+        eprintln!("Operations: authorize, sync");
+        std::process::exit(1);
+    }
+    
+    let url = &args[1];
+    let operation = args.get(2).map(|s| s.as_str()).unwrap_or("authorize");
+    
+    let response = match operation {
+        "authorize" => {
+            let auth_response = make_payment_authorization_request(url.to_string()).await?;
+            format!("Authorization Response: {:?}", auth_response)
+        },
+        "sync" => {
+            let sync_response = make_payment_sync_request(url.to_string()).await?;
+            format!("Sync Response: {:?}", sync_response)
+        },
+        _ => {
+            eprintln!("Unknown operation: {}. Use 'authorize' or 'sync'.", operation);
             std::process::exit(1);
         }
     };
+    
+    // Print the response
+    println!("{}", response);
+    Ok(())
+}
 
+/// Creates a gRPC client and sends a payment authorization request
+async fn make_payment_authorization_request(
+    url: String
+) -> Result<tonic::Response<payments::PaymentsAuthorizeResponse>, Box<dyn Error>> {
     // Create a gRPC client
-    let mut client = PaymentServiceClient::connect(url.clone()).await.unwrap();
+    let mut client = PaymentServiceClient::connect(url).await?;
 
-    // Create a request
+    let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "default_api_key".to_string());
+    let key1 = std::env::var("KEY1").unwrap_or_else(|_| "default_key1".to_string());
+    
+    // Create a request with the updated values
     let request = payments::PaymentsAuthorizeRequest {
         amount: 1000,
         currency: payments::Currency::Usd as i32,
-        connector: payments::Connector::Adyen as i32,
+        connector: payments::Connector::Razorpay as i32,  // Changed to RAZORPAY
         auth_creds: Some(payments::AuthType {
-            auth_details: Some(payments::auth_type::AuthDetails::SignatureKey(
-                payments::SignatureKey {
-                    api_key: "".to_string(),
-                    key1: "".to_string(),
-                    api_secret: "".to_string()
+            auth_details: Some(payments::auth_type::AuthDetails::BodyKey(  // Changed to BodyKey
+                payments::BodyKey {
+                    api_key,
+                    key1
                 },
             )),
         }),
         payment_method: payments::PaymentMethod::Card as i32,
         payment_method_data: Some(payments::PaymentMethodData {
             data: Some(payments::payment_method_data::Data::Card(payments::Card {
-                card_number: "4111111111111111".to_string(),
+                card_number: "5123456789012346".to_string(),  // Updated card number
                 card_exp_month: "03".to_string(),
                 card_exp_year: "2030".to_string(),
-                card_cvc: "737".to_string(),
+                card_cvc: "100".to_string(),  // Updated CVC
                 ..Default::default()
             })),
         }),
@@ -46,16 +74,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         enrolled_for_3ds: true,
         request_incremental_authorization: false,
         minor_amount: 1000,
+        email: Some("sweta.sharma@juspay.in".to_string()),
+        browser_info: Some(payments::BrowserInformation {  // Added browser_info
+            user_agent: Some("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)".to_string()),
+            accept_header: Some("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8".to_string()),
+            language: Some("en-US".to_string()),
+            color_depth: Some(24),
+            screen_height: Some(1080),
+            screen_width: Some(1920),
+            java_enabled: Some(false),
+            ..Default::default()
+        }),
         ..Default::default()
     };
 
     // Send the request
-    let response = client
-        .payment_authorize(request)
-        .await
-        .expect("Failed to send request");
+    let response = client.payment_authorize(request).await?;
+    
+    Ok(response)
+}
 
-    // Print the response
-    println!("Response: {:?}", response);
-    Ok(())
+/// Creates a gRPC client and sends a payment sync request
+async fn make_payment_sync_request(
+    url: String
+) -> Result<tonic::Response<payments::PaymentsSyncResponse>, Box<dyn Error>> {
+    // Create a gRPC client
+    let mut client = PaymentServiceClient::connect(url).await?;
+    
+    let resource_id = std::env::var("RESOURCE_ID").unwrap_or_else(|_| "pay_QHj9Thiy5mCC4Y".to_string());
+
+    let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "default_api_key".to_string());
+    let key1 = std::env::var("KEY1").unwrap_or_else(|_| "default_key1".to_string());
+
+    // Create a request
+    let request = payments::PaymentsSyncRequest {
+        connector: payments::Connector::Razorpay as i32,
+        auth_creds: Some(payments::AuthType {
+            auth_details: Some(payments::auth_type::AuthDetails::BodyKey(
+                payments::BodyKey {
+                    api_key,
+                    key1
+                },
+            )),
+        }),
+        resource_id,
+        connector_request_reference_id: Some("conn_req_abc".to_string()),
+    };
+    
+    // Send the request
+    let response = client.payment_sync(request).await?;
+    
+    Ok(response)
 }
