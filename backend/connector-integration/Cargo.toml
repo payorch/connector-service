@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 hyperswitch_domain_models = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4" }
 hyperswitch_common_utils = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4", package = "common_utils" }
+hyperswitch_common_enums = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4", package = "common_enums" }
 hyperswitch_api_models = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4", package = "api_models" }
 hyperswitch_masking = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4", package = "masking" }
 hyperswitch_interfaces = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4" }
@@ -16,4 +17,6 @@ serde_urlencoded = "0.7.1"
 serde_with = "3.7.0"
 error-stack = "0.4.0"
 strum = { version = "0.26", features = ["derive"] }
+time = "0.3.35"
+url = "2.5.0"
 hyperswitch_cards = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4", package = "cards"}

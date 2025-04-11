@@ -51,6 +51,7 @@ impl PaymentSyncV2 for Adyen {}
 
 #[derive(Clone)]
 pub struct Adyen {
+    #[allow(dead_code)]
     pub(crate) amount_converter: &'static (dyn AmountConvertor<Output = MinorUnit> + Sync),
 }
 
@@ -224,3 +225,4 @@ impl
     > for Adyen
 {
 }
+
