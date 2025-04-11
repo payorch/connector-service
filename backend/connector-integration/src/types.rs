@@ -1,4 +1,4 @@
-use crate::connectors::Adyen;
+use crate::connectors::{Adyen, Razorpay};
 use crate::flow;
 use hyperswitch_api_models::enums::Currency;
 use hyperswitch_common_utils::types::MinorUnit;
@@ -69,7 +69,7 @@ impl ConnectorData {
     fn convert_connector(connector_name: ConnectorEnum) -> BoxedConnector {
         match connector_name {
             ConnectorEnum::Adyen => Box::new(Adyen::new()),
-            ConnectorEnum::Razorpay => todo!(),
+            ConnectorEnum::Razorpay => Box::new(Razorpay::new()),
         }
     }
 }
