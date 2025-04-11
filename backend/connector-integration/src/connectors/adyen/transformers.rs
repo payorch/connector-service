@@ -563,6 +563,9 @@ impl
         
         let return_url = item.router_data.request.router_return_url.clone().unwrap();
 
+        let billing_address =
+            get_address_info(item.router_data.resource_common_data.address.get_payment_billing()).and_then(Result::ok);
+
         let card_holder_name = item.router_data.request.customer_name.clone();
         
         let payment_method = PaymentMethod::AdyenPaymentMethod(Box::new(
@@ -585,7 +588,7 @@ impl
             shopper_email: None,
             shopper_locale: None,
             social_security_number: None,
-            billing_address: None,
+            billing_address,
             delivery_address: None,
             country_code: None,
             line_items: None,
@@ -1139,5 +1142,24 @@ fn get_browser_info(item: &RouterDataV2<
     } else {
         Ok(None)
     }
+}
+
+pub fn get_address_info(
+    address: Option<&hyperswitch_api_models::payments::Address>,
+) -> Option<Result<Address, error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>>> {
+    address.and_then(|add| {
+        add.address.as_ref().map(
+            |a| -> Result<Address, error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>> {
+                Ok(Address {
+                    city: a.city.clone().unwrap(),
+                    country: a.country.unwrap(),
+                    house_number_or_name: a.line1.clone().unwrap(),
+                    postal_code: a.zip.clone().unwrap(),
+                    state_or_province: a.state.clone(),
+                    street: a.line2.clone(),
+                })
+            },
+        )
+    })
 }
 
