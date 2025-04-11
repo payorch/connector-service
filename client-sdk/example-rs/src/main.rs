@@ -49,7 +49,7 @@ async fn make_payment_authorization_request(
     let request = payments::PaymentsAuthorizeRequest {
         amount: 1000,
         currency: payments::Currency::Usd as i32,
-        connector: payments::Connector::Razorpay as i32,  // Changed to RAZORPAY
+        connector: payments::Connector::Adyen as i32,
         auth_creds: Some(payments::AuthType {
             auth_details: Some(payments::auth_type::AuthDetails::BodyKey(  // Changed to BodyKey
                 payments::BodyKey {
