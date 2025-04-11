@@ -383,21 +383,21 @@ fn get_adyen_payment_status(
     }
 }
 
-impl
+impl<F, Req>
     ForeignTryFrom<(
         AdyenPaymentResponse,
-        RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+        RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>,
         u16,
         Option<hyperswitch_api_models::enums::CaptureMethod>,
         bool,
         Option<hyperswitch_api_models::enums::PaymentMethodType>,
-    )> for RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>
+    )> for RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>
 {
     type Error = hyperswitch_interfaces::errors::ConnectorError;
     fn foreign_try_from(
         (response, data, http_code, _capture_method, _is_multiple_capture_psync_flow, pmt): (
             AdyenPaymentResponse,
-            RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+            RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>,
             u16,
             Option<hyperswitch_api_models::enums::CaptureMethod>,
             bool,
