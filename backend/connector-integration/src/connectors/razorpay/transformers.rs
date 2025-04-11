@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
+use hyperswitch_cards::CardNumber;
 use hyperswitch_common_utils::{pii::Email, request::Method, types::MinorUnit};
 
 use hyperswitch_domain_models::{
@@ -14,6 +15,14 @@ use hyperswitch_domain_models::{
 };
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
+use serde_json::to_string;
+use crate::{
+    flow::CreateOrder,
+    types::{
+        ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
+        PaymentOrderCreate, ValidationTrait,
+    },
+};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum Currency {
@@ -43,9 +52,9 @@ pub enum ConnectorError {
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct RazorpayCard {
-    number: String,
+    number: CardNumber,
     expiry_month: Secret<String>,
     expiry_year: Secret<String>,
     cvc: Option<Secret<String>>,
@@ -70,7 +79,7 @@ pub enum AuthType {
 
 #[serde_with::skip_serializing_none]
 #[derive(Default, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct Address {
     city: String,
     country: enums::CountryAlpha2,
@@ -87,9 +96,9 @@ pub enum PaymentMethod {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct CardDetails {
-    pub number: String,
+    pub number: CardNumber,
     pub name: String,
     pub expiry_month: Secret<String>,
     pub expiry_year: String,
@@ -97,13 +106,13 @@ pub struct CardDetails {
 }
 
 #[derive(Default, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct AuthenticationDetails {
     pub authentication_channel: String,
 }
 
 #[derive(Default, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct BrowserInfo {
     pub java_enabled: bool,
     pub javascript_enabled: bool,
@@ -115,16 +124,16 @@ pub struct BrowserInfo {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde( rename_all = "snake_case")]
 pub struct RazorpayPaymentRequest {
     pub amount: MinorUnit,
     pub currency: String,
     pub contact: String,
-    pub email: Email,
+    pub email: String,
     pub order_id: String,
-    pub method: String,
-    #[serde(flatten)]
-    pub payment_method_data: PaymentMethodSpecificData,
+    // pub method: String,
+    // #[serde(flatten)]
+    pub card: PaymentMethodSpecificData,
     pub authentication: Option<AuthenticationDetails>,
     pub browser: BrowserInfo,
     pub ip: String,
@@ -133,7 +142,7 @@ pub struct RazorpayPaymentRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "method", rename_all = "snake_case")]
+#[serde(untagged, rename_all = "snake_case")]
 pub enum PaymentMethodSpecificData {
     Card(CardDetails),
 }
@@ -188,7 +197,7 @@ impl TryFrom<(&Card, Option<Secret<String>>)> for RazorpayPaymentMethod {
         (card, card_holder_name): (&Card, Option<Secret<String>>),
     ) -> Result<Self, Self::Error> {
         let razorpay_card = RazorpayCard {
-            number: card.card_number.clone().to_string(),
+            number: card.card_number.clone(),
             expiry_month: card.card_exp_month.clone(),
             expiry_year: "2031".to_string().into(),
             cvc: Some(card.card_cvc.clone()),
@@ -224,23 +233,29 @@ impl
         ),
     ) -> Result<Self, Self::Error> {
         let (item, card_data) = value;
-
+println!("$$$ router data {:?}",item.router_data);
         let amount = item.amount;
         let currency = item.router_data.request.currency.to_string();
 
-        let contact = "9999999999".to_string();
+        let contact = "9900008989".to_string();
 
-        let email = item.router_data.request.email.clone().ok_or(
+        // let email = item.router_data.request.email.clone().ok_or(
+        //     hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
+        //         field_name: "email",
+        //     },
+        // )?;
+        let email="sweta.sharma@juspay.in".to_string();
+
+         let order_id = item.router_data.reference_id.clone().ok_or(
             hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
-                field_name: "email",
+                field_name: "ordeR_id",
             },
         )?;
-
-        let order_id = "order_id_here".to_string();
+        // let order_id = item.router_data.reference_id.clone() ;
         let method = "card".to_string();
         let card_holder_name = "Sweta Sharma".to_string().into();
-        let payment_method_data = PaymentMethodSpecificData::Card(CardDetails {
-            number: card_data.card_number.clone().to_string(),
+        let card = PaymentMethodSpecificData::Card(CardDetails {
+            number: card_data.card_number.clone(),
             name: card_holder_name,
             expiry_month: card_data.card_exp_month.clone(),
             expiry_year: "2030".to_string().into(),
@@ -267,8 +282,8 @@ impl
             contact,
             email,
             order_id,
-            method,
-            payment_method_data,
+            // method,
+            card,
             authentication,
             browser,
             ip: "105.106.107.108".to_string(),
@@ -310,60 +325,60 @@ pub struct ResponseRouterData<Flow, R, Request, Response> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct RazorpayPaymentResponse {
     pub razorpay_payment_id: String,
     pub next: Option<Vec<NextAction>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct NextAction {
     pub action: String,
     pub url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(untagged, rename_all = "snake_case")]
 pub enum RazorpayResponse {
     PaymentResponse(RazorpayPaymentResponse),
     PsyncResponse(RazorpayPsyncResponse),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct RazorpayPsyncResponse {
-    pub razorpay_payment_id: String,
-    pub entity: String,
-    pub amount: i64,
-    pub currency: String,
+    pub id: String,
+    // pub entity: String,
+    // pub amount: i64,
+    // pub currency: String,
     pub status: RazorpayStatus,
-    pub method: String,
-    pub order_id: Option<String>,
-    pub description: Option<String>,
-    pub international: bool,
-    pub refund_status: Option<String>,
-    pub amount_refunded: i64,
-    pub captured: bool,
-    pub email: String,
-    pub contact: String,
-    pub fee: i64,
-    pub tax: i64,
-    pub error_code: Option<String>,
-    pub error_description: Option<String>,
-    pub error_source: Option<String>,
-    pub error_step: Option<String>,
-    pub error_reason: Option<String>,
-    pub notes: Option<HashMap<String, String>>,
-    pub created_at: i64,
-    pub card_id: Option<String>,
-    pub card: Option<SyncCardDetails>,
-    pub upi: Option<SyncUPIDetails>,
-    pub acquirer_data: Option<Vec<AcquirerData>>,
+    // pub method: String,
+    // pub order_id: Option<String>,
+    // pub description: Option<String>,
+    // pub international: bool,
+    // pub refund_status: Option<String>,
+    // pub amount_refunded: i64,
+    // pub captured: bool,
+    // pub email: String,
+    // pub contact: String,
+    // pub fee: i64,
+    // pub tax: i64,
+    // pub error_code: Option<String>,
+    // pub error_description: Option<String>,
+    // pub error_source: Option<String>,
+    // pub error_step: Option<String>,
+    // pub error_reason: Option<String>,
+    // pub notes: Option<HashMap<String, String>>,
+    // pub created_at: i64,
+    // pub card_id: Option<String>,
+    // pub card: Option<SyncCardDetails>,
+    // pub upi: Option<SyncUPIDetails>,
+    // pub acquirer_data: Option<Vec<AcquirerData>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct SyncCardDetails {
     pub id: String,
     pub entity: String,
@@ -377,7 +392,7 @@ pub struct SyncCardDetails {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct SyncUPIDetails {
     pub payer_account_type: String,
     pub vpa: String,
@@ -386,7 +401,7 @@ pub struct SyncUPIDetails {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct AcquirerData {
     pub rrn: String,
     pub authentication_reference_number: String,
@@ -394,6 +409,8 @@ pub struct AcquirerData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+
 pub enum RazorpayStatus {
     Created,
     Authorized,
@@ -424,7 +441,7 @@ fn get_authorization_razorpay_payment_status_from_action(
     has_next_action: bool,
 ) -> AttemptStatus {
     if has_next_action {
-        AttemptStatus::Charged
+        AttemptStatus::AuthenticationPending
     } else if is_manual_capture {
         AttemptStatus::Authorized
     } else {
@@ -477,7 +494,7 @@ impl<F, Req>
 
         match response {
             RazorpayResponse::PaymentResponse(payment_response) => {
-                let _status =
+                let status =
                     get_authorization_razorpay_payment_status_from_action(is_manual_capture, true);
                 let redirect_url = payment_response
                     .next
@@ -507,7 +524,7 @@ impl<F, Req>
                     ),
                     redirection_data: *Box::new(Some(RedirectForm::Form {
                         endpoint: redirect_url,
-                        method: Method::Post,
+                        method: Method::Get,
                         form_fields,
                     })),
                     mandate_reference: None,
@@ -521,15 +538,19 @@ impl<F, Req>
 
                 Ok(Self {
                     response: error.map_or_else(|| Ok(payment_response_data), Err),
+                    resource_common_data: PaymentFlowData {
+                        status,
+                        ..data.resource_common_data
+                    },
                     ..data
                 })
             }
             RazorpayResponse::PsyncResponse(psync_response) => {
-                let _status =
+                let status =
                     get_psync_razorpay_payment_status(is_manual_capture, psync_response.status);
                 let psync_response_data = PaymentsResponseData::TransactionResponse {
                     resource_id: ResponseId::ConnectorTransactionId(
-                        psync_response.razorpay_payment_id,
+                        psync_response.id,
                     ),
                     redirection_data: None,
                     mandate_reference: None,
@@ -543,6 +564,10 @@ impl<F, Req>
 
                 Ok(Self {
                     response: error.map_or_else(|| Ok(psync_response_data), Err),
+                    resource_common_data: PaymentFlowData {
+                        status,
+                        ..data.resource_common_data
+                    },
                     ..data
                 })
             }
@@ -551,7 +576,7 @@ impl<F, Req>
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct RazorpayErrorResponse {
     pub status: i32,
     pub error_code: String,
@@ -559,3 +584,115 @@ pub struct RazorpayErrorResponse {
     pub error_type: String,
     pub psp_reference: Option<String>,
 }
+
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RazorpayOrderRequest {
+    pub amount: MinorUnit,
+    pub currency: String,
+    pub receipt: String,
+    // pub partial_payment: Option<bool>,
+    // pub first_payment_min_amount: Option<MinorUnit>,
+    // pub notes: Option<HashMap<String, String>>,
+}
+
+impl
+    TryFrom<
+        &RazorpayRouterData<
+            &RouterDataV2<
+                CreateOrder,
+                PaymentFlowData,
+                PaymentCreateOrderData,
+                PaymentCreateOrderResponse,
+            >,
+        >,
+    > for RazorpayOrderRequest
+{
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+
+    fn try_from(
+        item: &RazorpayRouterData<
+            &RouterDataV2<
+                CreateOrder,
+                PaymentFlowData,
+                PaymentCreateOrderData,
+                PaymentCreateOrderResponse,
+            >,
+        >,
+    ) -> Result<Self, Self::Error> {
+        let request_data = &item.router_data.request;
+
+        Ok(RazorpayOrderRequest {
+            amount: item.amount,
+            currency: request_data.currency.to_string(),
+            receipt: uuid::Uuid::new_v4().to_string(),
+            // partial_payment: Some(false),
+            // first_payment_min_amount: None,
+            // notes: None,
+        })
+    }
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RazorpayOrderResponse {
+    pub id: String,
+    // pub entity: String,
+    // pub amount: MinorUnit,
+    // pub amount_paid: MinorUnit,
+    // pub amount_due: MinorUnit,
+    // pub currency: String,
+    // pub receipt: String,
+    // pub status: String,
+    // pub attempts: u32,
+    // pub notes: Option<HashMap<String, String>>,
+    // pub created_at: u64,
+}
+
+impl
+    ForeignTryFrom<(
+        RazorpayOrderResponse,
+        RouterDataV2<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        >,
+        u16,
+        bool,
+    )> for RouterDataV2<
+        CreateOrder,
+        PaymentFlowData,
+        PaymentCreateOrderData,
+        PaymentCreateOrderResponse,
+    >
+{
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+
+    fn foreign_try_from(
+        (response, data, _status_code, _): (
+            RazorpayOrderResponse,
+            RouterDataV2<
+                CreateOrder,
+                PaymentFlowData,
+                PaymentCreateOrderData,
+                PaymentCreateOrderResponse,
+            >,
+            u16,
+            bool,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let order_response = PaymentCreateOrderResponse {
+            order_id: response.id,
+        };
+
+        Ok(Self {
+            response: Ok(order_response),
+            ..data
+        })
+    }
+}
+
+
