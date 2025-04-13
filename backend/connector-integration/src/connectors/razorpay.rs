@@ -2,7 +2,7 @@ pub mod transformers;
 
 use hyperswitch_common_utils::{
     errors::CustomResult,
-    ext_traits::{ByteSliceExt, OptionExt},
+    ext_traits::ByteSliceExt,
     request::{Method, RequestContent},
     types::{AmountConvertor, MinorUnit},
 };

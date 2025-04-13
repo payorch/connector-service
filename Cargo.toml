@@ -1,10 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "backend/connector-integration", "backend/external-services",
-    "backend/grpc-api-types",
-    "backend/grpc-server", 
+  "backend/grpc-api-types",
+  "backend/connector-integration",
+  "backend/external-services",
+  "backend/grpc-server"
 ]
-exclude = ["client-sdk/example-rs",
-"client-sdk/example-tui"
+exclude = [
+  "client-sdk/example-rs",
+  "client-sdk/example-tui",
+  "client-sdk/example-cli"
 ]
