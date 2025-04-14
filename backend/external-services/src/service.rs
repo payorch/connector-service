@@ -1,4 +1,4 @@
-use crate::errors::ApiClientError;
+use domain_types::errors::ApiClientError;
 // use base64::engine::Engine;
 use error_stack::{report, ResultExt};
 use hyperswitch_common_utils::{

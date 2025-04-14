@@ -18,7 +18,11 @@ use hyperswitch_domain_models::{
     router_response_types::PaymentsResponseData,
 };
 use hyperswitch_interfaces::{
-    api::{self, payments_v2::{PaymentAuthorizeV2, PaymentSyncV2}, CaptureSyncMethod, ConnectorCommon},
+    api::{
+        self,
+        payments_v2::{PaymentAuthorizeV2, PaymentSyncV2},
+        CaptureSyncMethod, ConnectorCommon,
+    },
     configs::Connectors,
     connector_integration_v2::ConnectorIntegrationV2,
     errors,
@@ -57,8 +61,6 @@ impl ConnectorServiceTrait for Razorpay {}
 impl PaymentAuthorizeV2 for Razorpay {}
 impl PaymentSyncV2 for Razorpay {}
 impl PaymentOrderCreate for Razorpay {}
-
-
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
@@ -248,7 +250,6 @@ impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsRe
             .connector_transaction_id
             .get_connector_transaction_id()
             .change_context(errors::ConnectorError::RequestEncodingFailed)?;
-        println!("$$$ payment id {:?} " ,payment_id);
         Ok(format!(
             "{}/v1/payments/{}",
             "https://api.razorpay.com", payment_id
@@ -259,7 +260,7 @@ impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsRe
     //     &self,
     //     req: &RouterDataV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>,
     // ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
-        
+
     // }
 
     fn handle_response_v2(
@@ -315,7 +316,8 @@ impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsRe
     }
 }
 
-impl ConnectorIntegrationV2<
+impl
+    ConnectorIntegrationV2<
         CreateOrder,
         PaymentFlowData,
         PaymentCreateOrderData,
@@ -324,7 +326,12 @@ impl ConnectorIntegrationV2<
 {
     fn get_headers(
         &self,
-        req: &RouterDataV2<CreateOrder, PaymentFlowData, PaymentCreateOrderData, PaymentCreateOrderResponse>,
+        req: &RouterDataV2<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        >,
     ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError> {
         let mut header = vec![(
             headers::CONTENT_TYPE.to_string(),
@@ -337,17 +344,24 @@ impl ConnectorIntegrationV2<
 
     fn get_url(
         &self,
-        _req: &RouterDataV2<CreateOrder, PaymentFlowData, PaymentCreateOrderData, PaymentCreateOrderResponse>,
+        _req: &RouterDataV2<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        >,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!(
-            "{}/v1/orders",
-            "https://api.razorpay.com"
-        ))
+        Ok(format!("{}/v1/orders", "https://api.razorpay.com"))
     }
 
     fn get_request_body(
         &self,
-        req: &RouterDataV2<CreateOrder, PaymentFlowData, PaymentCreateOrderData, PaymentCreateOrderResponse>,
+        req: &RouterDataV2<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        >,
     ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
         let connector_router_data =
             razorpay::RazorpayRouterData::try_from((req.request.amount, req))?;
@@ -357,11 +371,21 @@ impl ConnectorIntegrationV2<
 
     fn handle_response_v2(
         &self,
-        data: &RouterDataV2<CreateOrder, PaymentFlowData, PaymentCreateOrderData, PaymentCreateOrderResponse>,
+        data: &RouterDataV2<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        >,
         event_builder: Option<&mut ConnectorEvent>,
         res: Response,
     ) -> CustomResult<
-        RouterDataV2<CreateOrder, PaymentFlowData, PaymentCreateOrderData, PaymentCreateOrderResponse>,
+        RouterDataV2<
+            CreateOrder,
+            PaymentFlowData,
+            PaymentCreateOrderData,
+            PaymentCreateOrderResponse,
+        >,
         errors::ConnectorError,
     > {
         let response: razorpay::RazorpayOrderResponse = res
@@ -371,13 +395,8 @@ impl ConnectorIntegrationV2<
 
         event_builder.map(|i| i.set_response_body(&response));
 
-        RouterDataV2::foreign_try_from((
-            response,
-            data.clone(),
-            res.status_code,
-            false,
-        ))
-        .change_context(errors::ConnectorError::ResponseHandlingFailed)
+        RouterDataV2::foreign_try_from((response, data.clone(), res.status_code, false))
+            .change_context(errors::ConnectorError::ResponseHandlingFailed)
     }
 
     fn get_error_response_v2(
@@ -396,4 +415,3 @@ impl ConnectorIntegrationV2<
         self.build_error_response(res, event_builder)
     }
 }
-

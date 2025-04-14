@@ -5,6 +5,10 @@ use hyperswitch_api_models::enums::{self, AttemptStatus};
 use hyperswitch_cards::CardNumber;
 use hyperswitch_common_utils::{request::Method, types::MinorUnit};
 
+use crate::{
+    flow::CreateOrder,
+    types::{PaymentCreateOrderData, PaymentCreateOrderResponse},
+};
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
     router_data::{ConnectorAuthType, RouterData},
@@ -15,12 +19,6 @@ use hyperswitch_domain_models::{
 };
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
-use crate::{
-    flow::CreateOrder,
-    types::{
-        PaymentCreateOrderData, PaymentCreateOrderResponse,
-    },
-};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum Currency {
@@ -122,7 +120,7 @@ pub struct BrowserInfo {
 }
 
 #[derive(Debug, Serialize)]
-#[serde( rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub struct RazorpayPaymentRequest {
     pub amount: MinorUnit,
     pub currency: String,
@@ -231,7 +229,6 @@ impl
         ),
     ) -> Result<Self, Self::Error> {
         let (item, card_data) = value;
-println!("$$$ router data {:?}",item.router_data);
         let amount = item.amount;
         let currency = item.router_data.request.currency.to_string();
 
@@ -242,15 +239,15 @@ println!("$$$ router data {:?}",item.router_data);
         //         field_name: "email",
         //     },
         // )?;
-        let email="sweta.sharma@juspay.in".to_string();
+        let email = "sweta.sharma@juspay.in".to_string();
 
-         let order_id = item.router_data.reference_id.clone().ok_or(
+        let order_id = item.router_data.reference_id.clone().ok_or(
             hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
                 field_name: "ordeR_id",
             },
         )?;
         // let order_id = item.router_data.reference_id.clone() ;
-        let method = "card".to_string();
+        let _method = "card".to_string();
         let card_holder_name = "Sweta Sharma".to_string().into();
         let card = PaymentMethodSpecificData::Card(CardDetails {
             number: card_data.card_number.clone(),
@@ -547,9 +544,7 @@ impl<F, Req>
                 let status =
                     get_psync_razorpay_payment_status(is_manual_capture, psync_response.status);
                 let psync_response_data = PaymentsResponseData::TransactionResponse {
-                    resource_id: ResponseId::ConnectorTransactionId(
-                        psync_response.id,
-                    ),
+                    resource_id: ResponseId::ConnectorTransactionId(psync_response.id),
                     redirection_data: None,
                     mandate_reference: None,
                     connector_metadata: None,
@@ -582,7 +577,6 @@ pub struct RazorpayErrorResponse {
     pub error_type: String,
     pub psp_reference: Option<String>,
 }
-
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -632,7 +626,6 @@ impl
     }
 }
 
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayOrderResponse {
@@ -660,7 +653,8 @@ impl
         >,
         u16,
         bool,
-    )> for RouterDataV2<
+    )>
+    for RouterDataV2<
         CreateOrder,
         PaymentFlowData,
         PaymentCreateOrderData,
@@ -692,5 +686,3 @@ impl
         })
     }
 }
-
-
