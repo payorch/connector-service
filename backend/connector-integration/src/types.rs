@@ -1,5 +1,7 @@
 use crate::connectors::{Adyen, Razorpay};
 use crate::flow;
+use domain_types::errors::{ApiError, ApplicationErrorResponse};
+use domain_types::utils::ForeignTryFrom;
 use hyperswitch_api_models::enums::Currency;
 use hyperswitch_common_utils::types::MinorUnit;
 use hyperswitch_domain_models::router_data_v2::PaymentFlowData;
@@ -15,6 +17,24 @@ use hyperswitch_interfaces::{
 pub enum ConnectorEnum {
     Adyen,
     Razorpay,
+}
+
+impl ForeignTryFrom<i32> for ConnectorEnum {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(connector: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+        match connector {
+            2 => Ok(Self::Adyen),
+            68 => Ok(Self::Razorpay),
+            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_CONNECTOR".to_owned(),
+                error_identifier: 401,
+                error_message: format!("Invalid value for authenticate_by: {}", connector),
+                error_object: None,
+            })
+            .into()),
+        }
+    }
 }
 
 pub trait ConnectorServiceTrait:

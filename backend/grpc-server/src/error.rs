@@ -11,11 +11,3 @@ pub enum ConfigurationError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
-
-#[derive(Debug, thiserror::Error)]
-pub enum ParsingError {
-    #[error("Failed to parse struct: {0}")]
-    StructParseFailure(&'static str),
-    #[error("Failed to serialize to {0} format")]
-    EncodeError(&'static str),
-}

@@ -1,9 +1,10 @@
-use crate::{configs::Config, domain_types::generate_payment_sync_response, utils::ForeignTryFrom};
+use crate::configs::Config;
 use connector_integration::{
     self as connector_integration_service,
     flow::CreateOrder,
     types::{ConnectorData, PaymentCreateOrderData, PaymentCreateOrderResponse},
 };
+use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
 use external_services;
 use grpc_api_types::{
     payments::payment_service_server::PaymentService,
@@ -126,8 +127,7 @@ impl PaymentService for Payments {
         };
 
         //get connector data
-        let connector_data =
-            ConnectorData::get_connector_by_name(&connector);
+        let connector_data = ConnectorData::get_connector_by_name(&connector);
 
         // Get connector integration
         let connector_integration: BoxedConnectorIntegrationV2<
@@ -228,7 +228,7 @@ impl PaymentService for Payments {
 
         // Generate response
         let authorize_response =
-            match crate::domain_types::generate_payment_authorize_response(response) {
+            match domain_types::types::generate_payment_authorize_response(response) {
                 Ok(resp) => resp,
                 Err(e) => {
                     return Err(tonic::Status::internal(format!(
@@ -263,8 +263,7 @@ impl PaymentService for Payments {
         };
 
         // Get connector data
-        let connector_data =
-            ConnectorData::get_connector_by_name(&connector);
+        let connector_data = ConnectorData::get_connector_by_name(&connector);
 
         // Get connector integration
         let connector_integration: BoxedConnectorIntegrationV2<
