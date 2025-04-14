@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
 use hyperswitch_cards::CardNumber;
-use hyperswitch_common_utils::{pii::Email, request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{request::Method, types::MinorUnit};
 
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
@@ -15,12 +15,10 @@ use hyperswitch_domain_models::{
 };
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
-use serde_json::to_string;
 use crate::{
     flow::CreateOrder,
     types::{
-        ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
-        PaymentOrderCreate, ValidationTrait,
+        PaymentCreateOrderData, PaymentCreateOrderResponse,
     },
 };
 
