@@ -130,16 +130,11 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn get_url(
         &self,
-        _req: &RouterDataV2<
-            Authorize,
-            PaymentFlowData,
-            PaymentsAuthorizeData,
-            PaymentsResponseData,
-        >,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
         Ok(format!(
             "{}{}/payments",
-            "https://checkout-test.adyen.com/", ADYEN_API_VERSION
+            req.resource_common_data.connectors.adyen.base_url, ADYEN_API_VERSION
         ))
     }
 

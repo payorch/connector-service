@@ -15,6 +15,26 @@ use hyperswitch_domain_models::{
     router_data_v2::RouterDataV2, router_request_types::ResponseId,
 };
 
+#[derive(Clone, serde::Deserialize, Debug)]
+pub struct Connectors {
+    pub adyen: ConnectorParams,
+    pub razorpay: ConnectorParams,
+}
+
+#[derive(Clone, serde::Deserialize, Debug)]
+pub struct ConnectorParams {
+    /// base url
+    pub base_url: String,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct Proxy {
+    pub http_url: Option<String>,
+    pub https_url: Option<String>,
+    pub idle_pool_connection_timeout: Option<u64>,
+    pub bypass_proxy_urls: Vec<String>,
+}
+
 impl ForeignTryFrom<i32> for hyperswitch_common_enums::CardNetwork {
     type Error = ApplicationErrorResponse;
 
@@ -702,11 +722,11 @@ impl ForeignTryFrom<grpc_api_types::payments::PhoneDetails>
     }
 }
 
-impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
+impl ForeignTryFrom<(PaymentsAuthorizeRequest, Connectors)> for PaymentFlowData {
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
-        value: PaymentsAuthorizeRequest,
+        (value, connectors): (PaymentsAuthorizeRequest, Connectors),
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         let address = match value.address {
             Some(address) => {
@@ -748,6 +768,7 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
             test_mode: None,
             connector_http_status_code: None,
             external_latency: None,
+            connectors,
         })
     }
 }
@@ -953,11 +974,13 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentsS
     }
 }
 
-impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentFlowData {
+impl ForeignTryFrom<(grpc_api_types::payments::PaymentsSyncRequest, Connectors)>
+    for PaymentFlowData
+{
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
-        value: grpc_api_types::payments::PaymentsSyncRequest,
+        (value, connectors): (grpc_api_types::payments::PaymentsSyncRequest, Connectors),
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(Self {
             merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
@@ -986,6 +1009,7 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentFl
             test_mode: None,
             connector_http_status_code: None,
             external_latency: None,
+            connectors,
         })
     }
 }

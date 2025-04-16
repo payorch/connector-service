@@ -139,7 +139,10 @@ impl PaymentService for Payments {
         > = connector_data.connector.get_connector_integration_v2();
 
         // Create common request data
-        let mut payment_flow_data = match PaymentFlowData::foreign_try_from(payload.clone()) {
+        let mut payment_flow_data = match PaymentFlowData::foreign_try_from((
+            payload.clone(),
+            self.config.connectors.clone(),
+        )) {
             Ok(data) => data,
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(
@@ -289,7 +292,10 @@ impl PaymentService for Payments {
         };
 
         // Create common request data
-        let payment_flow_data = match PaymentFlowData::foreign_try_from(payload.clone()) {
+        let payment_flow_data = match PaymentFlowData::foreign_try_from((
+            payload.clone(),
+            self.config.connectors.clone(),
+        )) {
             Ok(data) => data,
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use domain_types::types::{Connectors, Proxy};
+
 use crate::{consts, error::ConfigurationError, logger::config::Log};
 
 #[derive(Clone, serde::Deserialize, Debug)]
@@ -7,7 +9,8 @@ pub struct Config {
     pub server: Server,
     pub metrics: MetricsServer,
     pub log: Log,
-    pub proxy: external_services::service::Proxy,
+    pub proxy: Proxy,
+    pub connectors: Connectors,
 }
 
 #[derive(Clone, serde::Deserialize, Debug)]

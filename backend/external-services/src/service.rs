@@ -1,4 +1,4 @@
-use domain_types::errors::ApiClientError;
+use domain_types::{errors::ApiClientError, types::Proxy};
 // use base64::engine::Engine;
 use error_stack::{report, ResultExt};
 use hyperswitch_common_utils::{
@@ -12,7 +12,6 @@ use hyperswitch_domain_models::{
 use hyperswitch_masking::{ErasedMaskSerialize, Maskable};
 use once_cell::sync::OnceCell;
 use reqwest::Client;
-use serde::Deserialize;
 use serde_json::json;
 use std::{str::FromStr, time::Duration};
 use tracing::field::Empty;
@@ -496,14 +495,6 @@ pub enum Tag {
     IncomingApi,
     /// Api Outgoing Request
     OutgoingApi,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct Proxy {
-    pub http_url: Option<String>,
-    pub https_url: Option<String>,
-    pub idle_pool_connection_timeout: Option<u64>,
-    pub bypass_proxy_urls: Vec<String>,
 }
 
 #[inline]

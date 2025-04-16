@@ -1,5 +1,6 @@
 use crate::connector_flow::{self, Authorize, PSync};
 use crate::errors::{ApiError, ApplicationErrorResponse};
+use crate::types::Connectors;
 use crate::utils::ForeignTryFrom;
 use hyperswitch_api_models::enums::Currency;
 use hyperswitch_common_utils::types::MinorUnit;
@@ -94,6 +95,7 @@ pub struct PaymentFlowData {
     pub test_mode: Option<bool>,
     pub connector_http_status_code: Option<u16>,
     pub external_latency: Option<u128>,
+    pub connectors: Connectors,
 }
 
 #[derive(Debug, Clone)]
