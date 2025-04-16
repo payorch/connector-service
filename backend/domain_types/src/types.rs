@@ -12,6 +12,7 @@ use grpc_api_types::payments::{
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
+use hyperswitch_common_utils::pii::Email;
 use hyperswitch_domain_models::{
     payment_method_data::PaymentMethodData, router_data::ConnectorAuthType,
     router_data_v2::RouterDataV2, router_request_types::ResponseId,
@@ -283,6 +284,19 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
     fn foreign_try_from(
         value: PaymentsAuthorizeRequest,
     ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let email: Option<Email> = match value.email {
+            Some(ref email_str) => Some(Email::try_from(email_str.clone()).map_err(|_| {
+                error_stack::Report::new(ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_EMAIL_FORMAT".to_owned(),
+                    error_identifier: 400,
+
+                    error_message: "Invalid email".to_owned(),
+                    error_object: None,
+                }))
+            })?),
+            None => None,
+        };
+
         Ok(Self {
             payment_method_data: PaymentMethodData::foreign_try_from(
                 value.clone().payment_method_data.ok_or_else(|| {
@@ -314,7 +328,7 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
             }),
             payment_method_type: Some(hyperswitch_common_enums::PaymentMethodType::Credit), //TODO
             minor_amount: hyperswitch_common_utils::types::MinorUnit::new(value.minor_amount),
-            email: None,
+            email,
             customer_name: None,
             statement_descriptor_suffix: None,
             statement_descriptor: None,
