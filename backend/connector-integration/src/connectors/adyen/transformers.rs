@@ -823,7 +823,7 @@ impl<F, Req>
         ),
     ) -> Result<Self, Self::Error> {
         let is_manual_capture = false;
-        let (_status, error, payment_response_data) = match response {
+        let (status, error, payment_response_data) = match response {
             AdyenPaymentResponse::Response(response) => {
                 get_adyen_response(*response, is_manual_capture, http_code, pmt)?
             }
@@ -834,6 +834,10 @@ impl<F, Req>
 
         Ok(Self {
             response: error.map_or_else(|| Ok(payment_response_data), Err),
+            resource_common_data: PaymentFlowData {
+                status,
+                ..data.resource_common_data
+            },
             ..data
         })
     }
