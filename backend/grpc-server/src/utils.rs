@@ -1,22 +1,5 @@
-use error_stack::{Result, ResultExt};
+use crate::consts;
 use http::request::Request;
-use serde::Serialize;
-
-use crate::{consts, error};
-
-/// Trait for converting from one foreign type to another
-pub trait ForeignTryFrom<F>: Sized {
-    /// Custom error for conversion failure
-    type Error;
-
-    /// Convert from a foreign type to the current type and return an error if the conversion fails
-    fn foreign_try_from(from: F) -> Result<Self, Self::Error>;
-}
-
-pub trait ForeignFrom<F>: Sized {
-    /// Convert from a foreign type to the current type and return an error if the conversion fails
-    fn foreign_from(from: F) -> Self;
-}
 
 /// Record the header's fields in request's trace
 pub fn record_fields_from_header<B: hyper::body::Body>(request: &Request<B>) -> tracing::Span {
@@ -42,49 +25,4 @@ pub fn record_fields_from_header<B: hyper::body::Body>(request: &Request<B>) -> 
         .map(|request_id| span.record("request_id", request_id));
 
     span
-}
-
-pub trait ValueExt {
-    /// Convert `serde_json::Value` into type `<T>` by using `serde::Deserialize`
-    fn parse_value<T>(self, type_name: &'static str) -> Result<T, error::ParsingError>
-    where
-        T: serde::de::DeserializeOwned;
-}
-
-impl ValueExt for serde_json::Value {
-    fn parse_value<T>(self, type_name: &'static str) -> Result<T, error::ParsingError>
-    where
-        T: serde::de::DeserializeOwned,
-    {
-        let debug = format!(
-            "Unable to parse {type_name} from serde_json::Value: {:?}",
-            &self
-        );
-        serde_json::from_value::<T>(self)
-            .change_context(error::ParsingError::StructParseFailure(type_name))
-            .attach_printable_lazy(|| debug)
-    }
-}
-
-pub trait Encode<'e>
-where
-    Self: 'e + std::fmt::Debug,
-{
-    fn encode_to_value(&'e self) -> Result<serde_json::Value, error::ParsingError>
-    where
-        Self: Serialize;
-}
-
-impl<'e, A> Encode<'e> for A
-where
-    Self: 'e + std::fmt::Debug,
-{
-    fn encode_to_value(&'e self) -> Result<serde_json::Value, error::ParsingError>
-    where
-        Self: Serialize,
-    {
-        serde_json::to_value(self)
-            .change_context(error::ParsingError::EncodeError("json-value"))
-            .attach_printable_lazy(|| format!("Unable to convert {self:?} to a value"))
-    }
 }

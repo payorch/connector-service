@@ -63,3 +63,11 @@ pub struct ApiError {
     pub error_message: String,
     pub error_object: Option<serde_json::Value>,
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum ParsingError {
+    #[error("Failed to parse struct: {0}")]
+    StructParseFailure(&'static str),
+    #[error("Failed to serialize to {0} format")]
+    EncodeError(&'static str),
+}

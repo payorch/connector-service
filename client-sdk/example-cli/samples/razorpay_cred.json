@@ -1,0 +1,8 @@
+{
+  "connector": "razorpay",
+  "auth": {
+    "api_key": "rzp_test_4UX9WwyEpxGkRv",
+    "key1": "4xzFIa6BEXNyhhHG6zdlm41B",
+    "auth_type": "body_key"
+  }
+}
