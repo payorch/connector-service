@@ -1291,3 +1291,44 @@ fn get_str(key: &str, riskdata: &serde_json::Value) -> Option<String> {
 fn get_bool(key: &str, riskdata: &serde_json::Value) -> Option<bool> {
     riskdata.get(key).and_then(|v| v.as_bool())
 }
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct AdyenRedirectRequest {
+    pub details: AdyenRedirectRequestTypes,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum AdyenRedirectRequestTypes {
+    AdyenRedirection(AdyenRedirection),
+    AdyenThreeDS(AdyenThreeDS),
+    AdyenRefusal(AdyenRefusal),
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenRedirection {
+    pub redirect_result: String,
+    #[serde(rename = "type")]
+    pub type_of_redirection_result: Option<String>,
+    pub result_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenThreeDS {
+    #[serde(rename = "threeDSResult")]
+    pub three_ds_result: String,
+    #[serde(rename = "type")]
+    pub type_of_redirection_result: Option<String>,
+    pub result_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenRefusal {
+    pub payload: String,
+    #[serde(rename = "type")]
+    pub type_of_redirection_result: Option<String>,
+    pub result_code: Option<String>,
+}

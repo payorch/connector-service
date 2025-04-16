@@ -745,7 +745,7 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
             status: hyperswitch_common_enums::AttemptStatus::Pending,
             payment_method: hyperswitch_common_enums::PaymentMethod::Card, //TODO
             address,
-            auth_type: hyperswitch_common_enums::AuthenticationType::default(),
+            auth_type: hyperswitch_common_enums::AuthenticationType::ThreeDs,
             connector_request_reference_id: value.connector_request_reference_id,
             customer_id: None,
             connector_customer: None,
