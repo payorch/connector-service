@@ -30,15 +30,13 @@ use hyperswitch_interfaces::{
 };
 use hyperswitch_masking::{Mask, Maskable};
 
+use domain_types::connector_types::{
+    ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentOrderCreate,
+    ValidationTrait,
+};
 use transformers::{self as adyen, ForeignTryFrom};
 
-use crate::{
-    flow::CreateOrder,
-    types::{
-        ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
-        PaymentOrderCreate, ValidationTrait,
-    },
-};
+use domain_types::connector_flow::CreateOrder;
 
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";

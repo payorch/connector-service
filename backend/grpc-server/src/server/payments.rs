@@ -1,8 +1,8 @@
 use crate::configs::Config;
-use connector_integration::{
-    self as connector_integration_service,
-    flow::CreateOrder,
-    types::{ConnectorData, PaymentCreateOrderData, PaymentCreateOrderResponse},
+use connector_integration::types::ConnectorData;
+use domain_types::{
+    connector_flow::CreateOrder,
+    connector_types::{PaymentCreateOrderData, PaymentCreateOrderResponse},
 };
 use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
 use external_services;
@@ -114,17 +114,17 @@ impl PaymentService for Payments {
         let payload = request.into_inner();
 
         // Convert connector enum from the request
-        let connector = match connector_integration_service::types::ConnectorEnum::foreign_try_from(
-            payload.connector,
-        ) {
-            Ok(connector) => connector,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid connector: {}",
-                    e
-                )))
-            }
-        };
+        let connector =
+            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+            {
+                Ok(connector) => connector,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid connector: {}",
+                        e
+                    )))
+                }
+            };
 
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -250,17 +250,17 @@ impl PaymentService for Payments {
         let payload = request.into_inner();
 
         // Convert connector enum from the request
-        let connector = match connector_integration_service::types::ConnectorEnum::foreign_try_from(
-            payload.connector,
-        ) {
-            Ok(connector) => connector,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid connector: {}",
-                    e
-                )))
-            }
-        };
+        let connector =
+            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+            {
+                Ok(connector) => connector,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid connector: {}",
+                        e
+                    )))
+                }
+            };
 
         // Get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);

@@ -5,9 +5,9 @@ use hyperswitch_api_models::enums::{self, AttemptStatus};
 use hyperswitch_cards::CardNumber;
 use hyperswitch_common_utils::{request::Method, types::MinorUnit};
 
-use crate::{
-    flow::CreateOrder,
-    types::{PaymentCreateOrderData, PaymentCreateOrderResponse},
+use domain_types::{
+    connector_flow::CreateOrder,
+    connector_types::{PaymentCreateOrderData, PaymentCreateOrderResponse},
 };
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},

@@ -33,9 +33,9 @@ use hyperswitch_masking::{Mask, Maskable, PeekInterface};
 
 use transformers::{self as razorpay, ForeignTryFrom};
 
-use crate::{
-    flow::CreateOrder,
-    types::{
+use domain_types::{
+    connector_flow::CreateOrder,
+    connector_types::{
         ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
         PaymentOrderCreate, ValidationTrait,
     },
