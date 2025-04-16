@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+domain_types ={ version = "0.1.0", path = "../domain_types" }
 base64 = "0.21"
 hyperswitch_domain_models = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4" }
 hyperswitch_common_utils = { git = "https://github.com/juspay/hyperswitch", tag = "v1.111.4", package = "common_utils" }

@@ -1,9 +1,8 @@
 use std::{collections::HashMap, str::FromStr};
 
+use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
-use connector_integration as connector_integration_service;
 use error_stack::{report, ResultExt};
-use external_services::errors::{ApiError, ApplicationErrorResponse};
 use grpc_api_types::payments::{
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse,
 };
@@ -15,24 +14,6 @@ use hyperswitch_domain_models::{
     router_request_types::{PaymentsAuthorizeData, ResponseId},
     router_response_types::PaymentsResponseData,
 };
-
-impl ForeignTryFrom<i32> for connector_integration_service::types::ConnectorEnum {
-    type Error = ApplicationErrorResponse;
-
-    fn foreign_try_from(connector: i32) -> Result<Self, error_stack::Report<Self::Error>> {
-        match connector {
-            2 => Ok(Self::Adyen),
-            68 => Ok(Self::Razorpay),
-            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
-                sub_code: "INVALID_CONNECTOR".to_owned(),
-                error_identifier: 401,
-                error_message: format!("Invalid value for authenticate_by: {}", connector),
-                error_object: None,
-            })
-            .into()),
-        }
-    }
-}
 
 impl ForeignTryFrom<i32> for hyperswitch_common_enums::CardNetwork {
     type Error = ApplicationErrorResponse;
