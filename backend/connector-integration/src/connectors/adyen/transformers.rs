@@ -10,7 +10,10 @@ use hyperswitch_domain_models::{
     router_request_types::{PaymentsAuthorizeData, ResponseId},
     router_response_types::{MandateReference, PaymentsResponseData, RedirectForm},
 };
-use hyperswitch_interfaces::consts::{NO_ERROR_CODE, NO_ERROR_MESSAGE};
+use hyperswitch_interfaces::{
+    consts::{NO_ERROR_CODE, NO_ERROR_MESSAGE},
+    errors,
+};
 use hyperswitch_masking::{ExposeInterface, Secret};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
@@ -60,7 +63,7 @@ pub struct AdyenCard {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
-pub enum AdyenPaymentMethod  {
+pub enum AdyenPaymentMethod {
     #[serde(rename = "scheme")]
     AdyenCard(Box<AdyenCard>),
 }
@@ -123,18 +126,17 @@ pub enum AdyenShopperInteraction {
     Pos,
 }
 
-impl From<&RouterDataV2<
-Authorize,
-PaymentFlowData,
-PaymentsAuthorizeData,
-PaymentsResponseData,
->> for AdyenShopperInteraction {
-    fn from(item: &RouterDataV2<
-        Authorize,
-        PaymentFlowData,
-        PaymentsAuthorizeData,
-        PaymentsResponseData,
-    >) -> Self {
+impl From<&RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>>
+    for AdyenShopperInteraction
+{
+    fn from(
+        item: &RouterDataV2<
+            Authorize,
+            PaymentFlowData,
+            PaymentsAuthorizeData,
+            PaymentsResponseData,
+        >,
+    ) -> Self {
         match item.request.off_session {
             Some(true) => Self::ContinuedAuthentication,
             _ => Self::Ecommerce,
@@ -514,11 +516,10 @@ impl TryFrom<(&Card, Option<Secret<String>>)> for AdyenPaymentMethod {
     fn try_from(
         (card, card_holder_name): (&Card, Option<Secret<String>>),
     ) -> Result<Self, Self::Error> {
-        
         let adyen_card = AdyenCard {
             number: card.card_number.clone(),
             expiry_month: card.card_exp_month.clone(),
-            expiry_year: "2030".to_string().into(),
+            expiry_year: card.card_exp_year.clone(),
             cvc: Some(card.card_cvc.clone()),
             holder_name: card_holder_name,
             brand: Some(CardBrand::Visa),
@@ -560,16 +561,30 @@ impl
         );
         let (recurring_processing_model, store_payment_method, _) =
             get_recurring_processing_model(item.router_data)?;
-        
-        let return_url = item.router_data.request.router_return_url.clone().unwrap();
 
-        let billing_address =
-            get_address_info(item.router_data.resource_common_data.address.get_payment_billing()).and_then(Result::ok);
+        let return_url = item
+            .router_data
+            .request
+            .router_return_url
+            .clone()
+            .ok_or_else(Box::new(move || {
+                errors::ConnectorError::MissingRequiredField {
+                    field_name: "return_url",
+                }
+            }))?;
+
+        let billing_address = get_address_info(
+            item.router_data
+                .resource_common_data
+                .address
+                .get_payment_billing(),
+        )
+        .and_then(Result::ok);
 
         let card_holder_name = item.router_data.request.customer_name.clone();
 
         let additional_data = get_additional_data(item.router_data);
-        
+
         let payment_method = PaymentMethod::AdyenPaymentMethod(Box::new(
             AdyenPaymentMethod::try_from((card_data, card_holder_name))?,
         ));
@@ -1068,16 +1083,20 @@ fn build_shopper_reference(
 type RecurringDetails = (Option<AdyenRecurringModel>, Option<bool>, Option<String>);
 
 fn get_recurring_processing_model(
-    item: &RouterDataV2<
-    Authorize,
-    PaymentFlowData,
-    PaymentsAuthorizeData,
-    PaymentsResponseData,
->,
+    item: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
 ) -> Result<RecurringDetails, Error> {
+    let customer_id = item
+        .request
+        .customer_id
+        .clone()
+        .ok_or_else(Box::new(move || {
+            errors::ConnectorError::MissingRequiredField {
+                field_name: "customer_id",
+            }
+        }))?;
+
     match (item.request.setup_future_usage, item.request.off_session) {
         (Some(hyperswitch_common_enums::enums::FutureUsage::OffSession), _) => {
-            let customer_id = item.request.customer_id.clone().unwrap();
             let shopper_reference = format!(
                 "{}_{}",
                 item.merchant_id.get_string_repr(),
@@ -1096,22 +1115,21 @@ fn get_recurring_processing_model(
             Some(format!(
                 "{}_{}",
                 item.merchant_id.get_string_repr(),
-                item.request.customer_id.clone().unwrap().get_string_repr()
+                customer_id.get_string_repr()
             )),
         )),
         _ => Ok((None, None, None)),
     }
 }
 
-fn is_mandate_payment(item: &RouterDataV2<
-    Authorize,
-    PaymentFlowData,
-    PaymentsAuthorizeData,
-    PaymentsResponseData,
->) -> bool {
+fn is_mandate_payment(
+    item: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+) -> bool {
     ((item.request.customer_acceptance.is_some() || item.request.setup_mandate_details.is_some())
-        && (item.request.setup_future_usage == Some(hyperswitch_common_enums::enums::FutureUsage::OffSession)))
-        || item.request
+        && (item.request.setup_future_usage
+            == Some(hyperswitch_common_enums::enums::FutureUsage::OffSession)))
+        || item
+            .request
             .mandate_id
             .as_ref()
             .and_then(|mandate_ids| mandate_ids.mandate_reference_id.as_ref())
@@ -1123,7 +1141,10 @@ pub fn get_address_info(
 ) -> Option<Result<Address, error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>>> {
     address.and_then(|add| {
         add.address.as_ref().map(
-            |a| -> Result<Address, error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>> {
+            |a| -> Result<
+                Address,
+                error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>,
+            > {
                 Ok(Address {
                     city: a.city.clone().unwrap(),
                     country: a.country.unwrap(),
@@ -1137,21 +1158,22 @@ pub fn get_address_info(
     })
 }
 
-fn get_additional_data(item: &RouterDataV2<
-    Authorize,
-    PaymentFlowData,
-    PaymentsAuthorizeData,
-    PaymentsResponseData,
->) -> Option<AdditionalData> {
+fn get_additional_data(
+    item: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
+) -> Option<AdditionalData> {
     let (authorisation_type, manual_capture) = match item.request.capture_method {
-        Some(hyperswitch_common_enums::enums::CaptureMethod::Manual) | Some(enums::CaptureMethod::ManualMultiple) => {
+        Some(hyperswitch_common_enums::enums::CaptureMethod::Manual)
+        | Some(enums::CaptureMethod::ManualMultiple) => {
             (Some(AuthType::PreAuth), Some("true".to_string()))
         }
         _ => (None, None),
     };
     let riskdata = item.request.metadata.clone().and_then(get_risk_data);
 
-    let execute_three_d = if matches!(item.resource_common_data.auth_type, hyperswitch_common_enums::enums::AuthenticationType::ThreeDs) {
+    let execute_three_d = if matches!(
+        item.resource_common_data.auth_type,
+        hyperswitch_common_enums::enums::AuthenticationType::ThreeDs
+    ) {
         Some("true".to_string())
     } else {
         None
@@ -1269,4 +1291,3 @@ fn get_str(key: &str, riskdata: &serde_json::Value) -> Option<String> {
 fn get_bool(key: &str, riskdata: &serde_json::Value) -> Option<bool> {
     riskdata.get(key).and_then(|v| v.as_bool())
 }
-
