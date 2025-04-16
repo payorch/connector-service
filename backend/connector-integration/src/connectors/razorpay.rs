@@ -1,5 +1,12 @@
 pub mod transformers;
 
+use domain_types::{
+    connector_flow::{Authorize, PSync},
+    connector_types::{
+        PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData,
+        PaymentsResponseData, PaymentsSyncData,
+    },
+};
 use hyperswitch_common_utils::{
     errors::CustomResult,
     ext_traits::ByteSliceExt,
@@ -12,17 +19,11 @@ use base64::Engine;
 use error_stack::ResultExt;
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
-    router_data_v2::{flow_common_types::PaymentFlowData, RouterDataV2},
-    router_flow_types::payments::{Authorize, PSync},
-    router_request_types::{PaymentsAuthorizeData, PaymentsSyncData, SyncRequestType},
-    router_response_types::PaymentsResponseData,
+    router_data_v2::RouterDataV2,
+    router_request_types::SyncRequestType,
 };
 use hyperswitch_interfaces::{
-    api::{
-        self,
-        payments_v2::{PaymentAuthorizeV2, PaymentSyncV2},
-        CaptureSyncMethod, ConnectorCommon,
-    },
+    api::{self, CaptureSyncMethod, ConnectorCommon},
     configs::Connectors,
     connector_integration_v2::ConnectorIntegrationV2,
     errors,
@@ -33,9 +34,9 @@ use hyperswitch_masking::{Mask, Maskable, PeekInterface};
 
 use transformers::{self as razorpay, ForeignTryFrom};
 
-use crate::{
-    flow::CreateOrder,
-    types::{
+use domain_types::{
+    connector_flow::CreateOrder,
+    connector_types::{
         ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
         PaymentOrderCreate, ValidationTrait,
     },
@@ -144,16 +145,11 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn get_url(
         &self,
-        _req: &RouterDataV2<
-            Authorize,
-            PaymentFlowData,
-            PaymentsAuthorizeData,
-            PaymentsResponseData,
-        >,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
         Ok(format!(
-            "{}/v1/payments/create/json",
-            "https://api.razorpay.com"
+            "{}v1/payments/create/json",
+            req.resource_common_data.connectors.razorpay.base_url
         ))
     }
 
@@ -252,8 +248,8 @@ impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsRe
             .get_connector_transaction_id()
             .change_context(errors::ConnectorError::RequestEncodingFailed)?;
         Ok(format!(
-            "{}/v1/payments/{}",
-            "https://api.razorpay.com", payment_id
+            "{}v1/payments/{}",
+            req.resource_common_data.connectors.razorpay.base_url, payment_id
         ))
     }
 
@@ -345,14 +341,17 @@ impl
 
     fn get_url(
         &self,
-        _req: &RouterDataV2<
+        req: &RouterDataV2<
             CreateOrder,
             PaymentFlowData,
             PaymentCreateOrderData,
             PaymentCreateOrderResponse,
         >,
     ) -> CustomResult<String, errors::ConnectorError> {
-        Ok(format!("{}/v1/orders", "https://api.razorpay.com"))
+        Ok(format!(
+            "{}v1/orders",
+            req.resource_common_data.connectors.razorpay.base_url
+        ))
     }
 
     fn get_request_body(

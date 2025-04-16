@@ -9,16 +9,14 @@ use hyperswitch_common_utils::{
 
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
-    router_data_v2::{flow_common_types::PaymentFlowData, RouterDataV2},
-    router_flow_types::{payments::Authorize, PSync},
-    router_request_types::{PaymentsAuthorizeData, PaymentsSyncData, SyncRequestType},
-    router_response_types::PaymentsResponseData,
+    router_data_v2::RouterDataV2,
+    router_request_types::SyncRequestType,
 };
 
 use error_stack::ResultExt;
 use hyperswitch_interfaces::{
     api::{
-        self, payments_v2::{PaymentAuthorizeV2, PaymentSyncV2}, CaptureSyncMethod, ConnectorCommon
+        self, CaptureSyncMethod, ConnectorCommon
     },
     configs::Connectors,
     connector_integration_v2::ConnectorIntegrationV2,
@@ -28,15 +26,17 @@ use hyperswitch_interfaces::{
 };
 use hyperswitch_masking::{Mask, Maskable};
 
-use transformers::{self as adyen, ForeignTryFrom};
-
-use crate::{
-    flow::CreateOrder,
-    types::{
-        ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
-        PaymentOrderCreate, ValidationTrait,
+use domain_types::{
+    connector_flow::{Authorize, PSync},
+    connector_types::{
+        ConnectorServiceTrait, PaymentAuthorizeV2, PaymentCreateOrderData,
+        PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate, PaymentSyncV2,
+        PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, ValidationTrait,
     },
 };
+use transformers::{self as adyen, ForeignTryFrom};
+
+use domain_types::connector_flow::CreateOrder;
 
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
@@ -134,16 +134,11 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
 
     fn get_url(
         &self,
-        _req: &RouterDataV2<
-            Authorize,
-            PaymentFlowData,
-            PaymentsAuthorizeData,
-            PaymentsResponseData,
-        >,
+        req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
         Ok(format!(
             "{}{}/payments",
-            "https://checkout-test.adyen.com/", ADYEN_API_VERSION
+            req.resource_common_data.connectors.adyen.base_url, ADYEN_API_VERSION
         ))
     }
 

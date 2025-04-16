@@ -1,8 +1,11 @@
 use crate::configs::Config;
-use connector_integration::{
-    self as connector_integration_service,
-    flow::CreateOrder,
-    types::{ConnectorData, PaymentCreateOrderData, PaymentCreateOrderResponse},
+use connector_integration::types::ConnectorData;
+use domain_types::{
+    connector_flow::{Authorize, CreateOrder, PSync},
+    connector_types::{
+        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
+        PaymentsResponseData, PaymentsSyncData,
+    },
 };
 use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
 use external_services;
@@ -15,10 +18,7 @@ use grpc_api_types::{
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
-    router_data_v2::{PaymentFlowData, RouterDataV2},
-    router_flow_types::{Authorize, PSync},
-    router_request_types::{PaymentsAuthorizeData, PaymentsSyncData},
-    router_response_types::PaymentsResponseData,
+    router_data_v2::RouterDataV2,
 };
 use hyperswitch_interfaces::connector_integration_v2::BoxedConnectorIntegrationV2;
 use tracing::info;
@@ -114,17 +114,17 @@ impl PaymentService for Payments {
         let payload = request.into_inner();
 
         // Convert connector enum from the request
-        let connector = match connector_integration_service::types::ConnectorEnum::foreign_try_from(
-            payload.connector,
-        ) {
-            Ok(connector) => connector,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid connector: {}",
-                    e
-                )))
-            }
-        };
+        let connector =
+            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+            {
+                Ok(connector) => connector,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid connector: {}",
+                        e
+                    )))
+                }
+            };
 
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -139,7 +139,10 @@ impl PaymentService for Payments {
         > = connector_data.connector.get_connector_integration_v2();
 
         // Create common request data
-        let mut payment_flow_data = match PaymentFlowData::foreign_try_from(payload.clone()) {
+        let mut payment_flow_data = match PaymentFlowData::foreign_try_from((
+            payload.clone(),
+            self.config.connectors.clone(),
+        )) {
             Ok(data) => data,
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(
@@ -250,17 +253,17 @@ impl PaymentService for Payments {
         let payload = request.into_inner();
 
         // Convert connector enum from the request
-        let connector = match connector_integration_service::types::ConnectorEnum::foreign_try_from(
-            payload.connector,
-        ) {
-            Ok(connector) => connector,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid connector: {}",
-                    e
-                )))
-            }
-        };
+        let connector =
+            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+            {
+                Ok(connector) => connector,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid connector: {}",
+                        e
+                    )))
+                }
+            };
 
         // Get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -289,7 +292,10 @@ impl PaymentService for Payments {
         };
 
         // Create common request data
-        let payment_flow_data = match PaymentFlowData::foreign_try_from(payload.clone()) {
+        let payment_flow_data = match PaymentFlowData::foreign_try_from((
+            payload.clone(),
+            self.config.connectors.clone(),
+        )) {
             Ok(data) => data,
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(

@@ -1,0 +1,8 @@
+#[derive(Debug, Clone)]
+pub struct CreateOrder;
+
+#[derive(Debug, Clone)]
+pub struct Authorize;
+
+#[derive(Debug, Clone)]
+pub struct PSync;

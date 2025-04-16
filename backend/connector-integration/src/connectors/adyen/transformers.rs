@@ -1,3 +1,7 @@
+use domain_types::{
+    connector_flow::Authorize,
+    connector_types::{PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData},
+};
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
 use hyperswitch_common_utils::{errors::CustomResult, request::Method, types::MinorUnit};
@@ -5,10 +9,9 @@ use hyperswitch_common_utils::{errors::CustomResult, request::Method, types::Min
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
     router_data::{ConnectorAuthType, ErrorResponse, RouterData},
-    router_data_v2::{PaymentFlowData, RouterDataV2},
-    router_flow_types::Authorize,
-    router_request_types::{PaymentsAuthorizeData, ResponseId},
-    router_response_types::{MandateReference, PaymentsResponseData, RedirectForm},
+    router_data_v2::RouterDataV2,
+    router_request_types::ResponseId,
+    router_response_types::{MandateReference, RedirectForm},
 };
 use hyperswitch_interfaces::{
     consts::{NO_ERROR_CODE, NO_ERROR_MESSAGE},
@@ -511,17 +514,17 @@ impl TryFrom<&ConnectorAuthType> for AdyenAuthType {
     }
 }
 
-impl TryFrom<(&Card, Option<Secret<String>>)> for AdyenPaymentMethod {
+impl TryFrom<(&Card, Option<String>)> for AdyenPaymentMethod {
     type Error = hyperswitch_interfaces::errors::ConnectorError;
     fn try_from(
-        (card, card_holder_name): (&Card, Option<Secret<String>>),
+        (card, card_holder_name): (&Card, Option<String>),
     ) -> Result<Self, Self::Error> {
         let adyen_card = AdyenCard {
             number: card.card_number.clone(),
             expiry_month: card.card_exp_month.clone(),
             expiry_year: card.card_exp_year.clone(),
             cvc: Some(card.card_cvc.clone()),
-            holder_name: card_holder_name,
+            holder_name: card_holder_name.map(Secret::new),
             brand: Some(CardBrand::Visa),
             network_payment_reference: None,
         };
@@ -877,7 +880,7 @@ pub fn get_adyen_response(
     } else {
         None
     };
-    let mandate_reference = response
+    let _mandate_reference = response
         .additional_data
         .as_ref()
         .and_then(|data| data.recurring_detail_reference.to_owned())
@@ -893,13 +896,11 @@ pub fn get_adyen_response(
 
     let payments_response_data = PaymentsResponseData::TransactionResponse {
         resource_id: ResponseId::ConnectorTransactionId(response.psp_reference),
-        redirection_data: None,
-        mandate_reference: mandate_reference,
+        redirection_data: Box::new(None),
         connector_metadata: None,
         network_txn_id,
         connector_response_reference_id: Some(response.merchant_reference),
         incremental_authorization_allowed: None,
-        charge_id: None,
     };
     Ok((status, error, payments_response_data))
 }
@@ -961,8 +962,7 @@ pub fn get_redirection_response(
             Some(psp) => ResponseId::ConnectorTransactionId(psp.to_string()),
             None => ResponseId::NoResponseId,
         },
-        redirection_data: redirection_data,
-        mandate_reference: None,
+        redirection_data: Box::new(redirection_data),
         connector_metadata,
         network_txn_id: None,
         connector_response_reference_id: response
@@ -970,7 +970,6 @@ pub fn get_redirection_response(
             .clone()
             .or(response.psp_reference),
         incremental_authorization_allowed: None,
-        charge_id: None,
     };
     Ok((status, error, payments_response_data))
 }
@@ -1129,9 +1128,8 @@ fn get_recurring_processing_model(
 fn is_mandate_payment(
     item: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
 ) -> bool {
-    ((item.request.customer_acceptance.is_some() || item.request.setup_mandate_details.is_some())
-        && (item.request.setup_future_usage
-            == Some(hyperswitch_common_enums::enums::FutureUsage::OffSession)))
+    (item.request.setup_future_usage
+            == Some(hyperswitch_common_enums::enums::FutureUsage::OffSession))
         || item
             .request
             .mandate_id

@@ -1,6 +1,10 @@
 use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
+use crate::connector_flow::{Authorize, PSync};
+use crate::connector_types::{
+    PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+};
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
@@ -9,13 +13,29 @@ use grpc_api_types::payments::{
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_domain_models::{
-    payment_method_data::PaymentMethodData,
-    router_data::ConnectorAuthType,
-    router_data_v2::{PaymentFlowData, RouterDataV2},
-    router_flow_types::Authorize,
-    router_request_types::{PaymentsAuthorizeData, ResponseId},
-    router_response_types::PaymentsResponseData,
+    payment_method_data::PaymentMethodData, router_data::ConnectorAuthType,
+    router_data_v2::RouterDataV2, router_request_types::ResponseId,
 };
+
+#[derive(Clone, serde::Deserialize, Debug)]
+pub struct Connectors {
+    pub adyen: ConnectorParams,
+    pub razorpay: ConnectorParams,
+}
+
+#[derive(Clone, serde::Deserialize, Debug)]
+pub struct ConnectorParams {
+    /// base url
+    pub base_url: String,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct Proxy {
+    pub http_url: Option<String>,
+    pub https_url: Option<String>,
+    pub idle_pool_connection_timeout: Option<u64>,
+    pub bypass_proxy_urls: Vec<String>,
+}
 
 impl ForeignTryFrom<i32> for hyperswitch_common_enums::CardNetwork {
     type Error = ApplicationErrorResponse;
@@ -306,15 +326,11 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
             setup_future_usage: None,
             mandate_id: None,
             off_session: None,
-            customer_acceptance: None,
-            setup_mandate_details: None,
-            order_details: None,
             order_category: None,
             session_token: None,
             enrolled_for_3ds: false,
             related_transaction_id: None,
             payment_experience: None,
-            surcharge_details: None,
             customer_id: value
                 .connector_customer
                 .clone()
@@ -328,10 +344,11 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
                 }))?,
             request_incremental_authorization: false,
             metadata: None,
-            authentication_data: None,
-            charges: None,
             merchant_order_reference_id: None,
-            integrity_object: None,
+            order_tax_amount: None,
+            shipping_cost: None,
+            merchant_account_id: None,
+            merchant_config_currency: None,
         })
     }
 }
@@ -717,11 +734,11 @@ impl ForeignTryFrom<grpc_api_types::payments::PhoneDetails>
     }
 }
 
-impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
+impl ForeignTryFrom<(PaymentsAuthorizeRequest, Connectors)> for PaymentFlowData {
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
-        value: PaymentsAuthorizeRequest,
+        (value, connectors): (PaymentsAuthorizeRequest, Connectors),
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         let address = match value.address {
             Some(address) => {
@@ -758,16 +775,12 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentFlowData {
             session_token: None,
             reference_id: None,
             payment_method_token: None,
-            recurring_mandate_payment_data: None,
             preprocessing_id: None,
-            payment_method_balance: None,
             connector_api_version: None,
             test_mode: None,
             connector_http_status_code: None,
             external_latency: None,
-            apple_pay_flow: None,
-            connector_response: None,
-            payment_method_status: None,
+            connectors,
         })
     }
 }
@@ -860,12 +873,10 @@ pub fn generate_payment_authorize_response(
             PaymentsResponseData::TransactionResponse {
                 resource_id,
                 redirection_data,
-                mandate_reference: _,
                 connector_metadata: _,
                 network_txn_id,
                 connector_response_reference_id,
                 incremental_authorization_allowed,
-                charge_id: _,
             } => {
                 PaymentsAuthorizeResponse {
                     resource_id: Some(grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)?),
@@ -943,9 +954,7 @@ pub fn generate_payment_authorize_response(
     Ok(response)
 }
 
-impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest>
-    for hyperswitch_domain_models::router_request_types::PaymentsSyncData
-{
+impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentsSyncData {
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
@@ -973,16 +982,17 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest>
             currency,
             payment_experience: None,
             amount,
-            integrity_object: None,
         })
     }
 }
 
-impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentFlowData {
+impl ForeignTryFrom<(grpc_api_types::payments::PaymentsSyncRequest, Connectors)>
+    for PaymentFlowData
+{
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
-        value: grpc_api_types::payments::PaymentsSyncRequest,
+        (value, connectors): (grpc_api_types::payments::PaymentsSyncRequest, Connectors),
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(Self {
             merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
@@ -1006,16 +1016,12 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentsSyncRequest> for PaymentFl
             session_token: None,
             reference_id: None,
             payment_method_token: None,
-            recurring_mandate_payment_data: None,
             preprocessing_id: None,
-            payment_method_balance: None,
             connector_api_version: None,
             test_mode: None,
             connector_http_status_code: None,
             external_latency: None,
-            apple_pay_flow: None,
-            connector_response: None,
-            payment_method_status: None,
+            connectors,
         })
     }
 }
@@ -1071,12 +1077,7 @@ impl ForeignFrom<hyperswitch_common_enums::AttemptStatus>
 }
 
 pub fn generate_payment_sync_response(
-    router_data_v2: RouterDataV2<
-        hyperswitch_domain_models::router_flow_types::PSync,
-        PaymentFlowData,
-        hyperswitch_domain_models::router_request_types::PaymentsSyncData,
-        PaymentsResponseData,
-    >,
+    router_data_v2: RouterDataV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>,
 ) -> Result<PaymentsSyncResponse, error_stack::Report<ApplicationErrorResponse>> {
     let transaction_response = router_data_v2.response;
 
@@ -1085,12 +1086,10 @@ pub fn generate_payment_sync_response(
             PaymentsResponseData::TransactionResponse {
                 resource_id,
                 redirection_data: _,
-                mandate_reference: _,
                 connector_metadata: _,
                 network_txn_id,
                 connector_response_reference_id,
                 incremental_authorization_allowed: _,
-                charge_id: _,
             } => {
                 let status = router_data_v2.resource_common_data.status;
                 let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
