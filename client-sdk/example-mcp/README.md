@@ -8,6 +8,26 @@ This is an example implementation of an MCP server that provides payment-related
 - Payment sync
 - Payment details retrieval
 
+## Prerequisites
+
+Before you begin, you need to install `uv`, a fast Python package installer and resolver:
+
+### On Unix/macOS:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### On Windows:
+```powershell
+# Using PowerShell
+irm https://astral.sh/uv/install.ps1 | iex
+```
+
+### Using pip:
+```bash
+pip install uv
+```
+
 ## Setup
 
 1. Clone the repository:
