@@ -6,16 +6,18 @@ use hyperswitch_cards::CardNumber;
 use hyperswitch_common_utils::{request::Method, types::MinorUnit};
 
 use domain_types::{
-    connector_flow::CreateOrder,
-    connector_types::{PaymentCreateOrderData, PaymentCreateOrderResponse},
+    connector_flow::{Authorize, CreateOrder},
+    connector_types::{
+        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
+        PaymentsResponseData,
+    },
 };
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
     router_data::{ConnectorAuthType, RouterData},
-    router_data_v2::{PaymentFlowData, RouterDataV2},
-    router_flow_types::Authorize,
-    router_request_types::{PaymentsAuthorizeData, ResponseId},
-    router_response_types::{PaymentsResponseData, RedirectForm},
+    router_data_v2::RouterDataV2,
+    router_request_types::ResponseId,
+    router_response_types::RedirectForm,
 };
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
@@ -517,17 +519,15 @@ impl<F, Req>
                     resource_id: ResponseId::ConnectorTransactionId(
                         payment_response.razorpay_payment_id.clone(),
                     ),
-                    redirection_data: *Box::new(Some(RedirectForm::Form {
+                    redirection_data: Box::new(Some(RedirectForm::Form {
                         endpoint: redirect_url,
                         method: Method::Get,
                         form_fields,
                     })),
-                    mandate_reference: None,
                     connector_metadata: None,
                     network_txn_id: None,
                     connector_response_reference_id: None,
                     incremental_authorization_allowed: None,
-                    charge_id: None,
                 };
                 let error = None;
 
@@ -545,13 +545,11 @@ impl<F, Req>
                     get_psync_razorpay_payment_status(is_manual_capture, psync_response.status);
                 let psync_response_data = PaymentsResponseData::TransactionResponse {
                     resource_id: ResponseId::ConnectorTransactionId(psync_response.id),
-                    redirection_data: None,
-                    mandate_reference: None,
+                    redirection_data: Box::new(None),
                     connector_metadata: None,
                     network_txn_id: None,
                     connector_response_reference_id: None,
                     incremental_authorization_allowed: None,
-                    charge_id: None,
                 };
                 let error = None;
 

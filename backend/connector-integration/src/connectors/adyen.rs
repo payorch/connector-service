@@ -9,19 +9,12 @@ use hyperswitch_common_utils::{
 
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
-    router_data_v2::{flow_common_types::PaymentFlowData, RouterDataV2},
-    router_flow_types::{payments::Authorize, PSync},
-    router_request_types::{PaymentsAuthorizeData, PaymentsSyncData},
-    router_response_types::PaymentsResponseData,
+    router_data_v2::RouterDataV2,
 };
 
 use error_stack::ResultExt;
 use hyperswitch_interfaces::{
-    api::{
-        self,
-        payments_v2::{PaymentAuthorizeV2, PaymentSyncV2},
-        ConnectorCommon,
-    },
+    api::{self, ConnectorCommon},
     configs::Connectors,
     connector_integration_v2::ConnectorIntegrationV2,
     errors,
@@ -30,9 +23,13 @@ use hyperswitch_interfaces::{
 };
 use hyperswitch_masking::{Mask, Maskable};
 
-use domain_types::connector_types::{
-    ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentOrderCreate,
-    ValidationTrait,
+use domain_types::{
+    connector_flow::{Authorize, PSync},
+    connector_types::{
+        ConnectorServiceTrait, PaymentAuthorizeV2, PaymentCreateOrderData,
+        PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate, PaymentSyncV2,
+        PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, ValidationTrait,
+    },
 };
 use transformers::{self as adyen, ForeignTryFrom};
 

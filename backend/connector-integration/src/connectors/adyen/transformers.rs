@@ -1,3 +1,7 @@
+use domain_types::{
+    connector_flow::Authorize,
+    connector_types::{PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData},
+};
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
 use hyperswitch_common_utils::types::MinorUnit;
@@ -5,10 +9,8 @@ use hyperswitch_common_utils::types::MinorUnit;
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
     router_data::{ConnectorAuthType, RouterData},
-    router_data_v2::{PaymentFlowData, RouterDataV2},
-    router_flow_types::Authorize,
-    router_request_types::{PaymentsAuthorizeData, ResponseId},
-    router_response_types::PaymentsResponseData,
+    router_data_v2::RouterDataV2,
+    router_request_types::ResponseId,
 };
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
@@ -408,13 +410,11 @@ impl<F, Req>
         let status = get_adyen_payment_status(is_manual_capture, response.result_code, pmt);
         let payment_response_data = PaymentsResponseData::TransactionResponse {
             resource_id: ResponseId::ConnectorTransactionId(response.psp_reference.clone()),
-            redirection_data: None,
-            mandate_reference: None,
+            redirection_data: Box::new(None),
             connector_metadata: None,
             network_txn_id: None,
             connector_response_reference_id: Some(response.merchant_reference),
             incremental_authorization_allowed: None,
-            charge_id: None,
         };
         let error = if response.refusal_reason.is_some() || response.refusal_reason_code.is_some() {
             Some(hyperswitch_domain_models::router_data::ErrorResponse {

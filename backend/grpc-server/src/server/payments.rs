@@ -1,8 +1,11 @@
 use crate::configs::Config;
 use connector_integration::types::ConnectorData;
 use domain_types::{
-    connector_flow::CreateOrder,
-    connector_types::{PaymentCreateOrderData, PaymentCreateOrderResponse},
+    connector_flow::{Authorize, CreateOrder, PSync},
+    connector_types::{
+        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
+        PaymentsResponseData, PaymentsSyncData,
+    },
 };
 use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
 use external_services;
@@ -15,10 +18,7 @@ use grpc_api_types::{
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
-    router_data_v2::{PaymentFlowData, RouterDataV2},
-    router_flow_types::{Authorize, PSync},
-    router_request_types::{PaymentsAuthorizeData, PaymentsSyncData},
-    router_response_types::PaymentsResponseData,
+    router_data_v2::RouterDataV2,
 };
 use hyperswitch_interfaces::connector_integration_v2::BoxedConnectorIntegrationV2;
 use tracing::info;
