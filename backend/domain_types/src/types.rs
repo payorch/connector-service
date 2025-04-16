@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::connector_flow::{Authorize, PSync};
@@ -10,6 +11,7 @@ use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse,
 };
+use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_domain_models::{
     payment_method_data::PaymentMethodData, router_data::ConnectorAuthType,
     router_data_v2::RouterDataV2, router_request_types::ResponseId,
@@ -319,7 +321,7 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
             statement_descriptor_suffix: None,
             statement_descriptor: None,
             capture_method: None,
-            router_return_url: None,
+            router_return_url: value.return_url,
             complete_authorize_url: None,
             setup_future_usage: None,
             mandate_id: None,
@@ -329,7 +331,17 @@ impl ForeignTryFrom<PaymentsAuthorizeRequest> for PaymentsAuthorizeData {
             enrolled_for_3ds: false,
             related_transaction_id: None,
             payment_experience: None,
-            customer_id: None,
+            customer_id: value
+                .connector_customer
+                .clone()
+                .map(|customer_id| CustomerId::try_from(Cow::from(customer_id)))
+                .transpose()
+                .change_context(ApplicationErrorResponse::BadRequest(ApiError {
+                    sub_code: "INVALID_CUSTOMER_ID".to_owned(),
+                    error_identifier: 400,
+                    error_message: "Failed to parse Customer Id".to_owned(),
+                    error_object: None,
+                }))?,
             request_incremental_authorization: false,
             metadata: None,
             merchant_order_reference_id: None,

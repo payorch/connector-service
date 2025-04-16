@@ -49,6 +49,7 @@ pub(crate) mod headers {
 
 #[derive(Clone)]
 pub struct Razorpay {
+    #[allow(dead_code)]
     pub(crate) amount_converter: &'static (dyn AmountConvertor<Output = MinorUnit> + Sync),
 }
 

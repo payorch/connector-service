@@ -1026,7 +1026,6 @@ dependencies = [
  "base64 0.21.7",
  "cards",
  "common_utils",
- "domain_types",
  "error-stack",
  "hyperswitch_domain_models",
  "hyperswitch_interfaces",
@@ -1320,24 +1319,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "domain_types"
-version = "0.1.0"
-dependencies = [
- "api_models",
- "cards",
- "common_enums",
- "common_utils",
- "error-stack",
- "grpc-api-types",
- "hyperswitch_domain_models",
- "hyperswitch_interfaces",
- "serde",
- "serde_json",
- "strum 0.26.3",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "dot-generator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1473,7 +1454,6 @@ dependencies = [
  "clap",
  "common_utils",
  "config",
- "domain_types",
  "error-stack",
  "hex",
  "http 1.3.1",
@@ -1783,7 +1763,6 @@ dependencies = [
  "common_utils",
  "config",
  "connector-integration",
- "domain_types",
  "error-stack",
  "external-services",
  "gethostname 0.5.0",
