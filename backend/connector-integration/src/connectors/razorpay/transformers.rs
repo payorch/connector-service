@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use hyperswitch_api_models::enums::{self, AttemptStatus};
+use hyperswitch_api_models::enums::{self, AttemptStatus, CardNetwork};
 
 use hyperswitch_cards::CardNumber;
-use hyperswitch_common_utils::{request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{pii::Email, request::Method, types::MinorUnit};
 
 use domain_types::{
     connector_flow::{Authorize, CreateOrder},
@@ -57,7 +57,7 @@ pub struct RazorpayCard {
     expiry_year: Secret<String>,
     cvc: Option<Secret<String>>,
     holder_name: Option<Secret<String>>,
-    brand: Option<CardBrand>,
+    brand: Option<CardNetwork>,
     network_payment_reference: Option<Secret<String>>,
 }
 
@@ -93,32 +93,42 @@ pub enum PaymentMethod {
     RazorpayPaymentMethod(Box<RazorpayPaymentMethod>),
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CardDetails {
     pub number: CardNumber,
-    pub name: String,
-    pub expiry_month: Secret<String>,
-    pub expiry_year: String,
+    pub name: Option<String>,
+    pub expiry_month: Option<Secret<String>>,
+    pub expiry_year: Secret<String>,
     pub cvv: Option<Secret<String>>,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthenticationChannel {
+    #[default]
+    Browser,
+    App,
 }
 
 #[derive(Default, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AuthenticationDetails {
-    pub authentication_channel: String,
+    pub authentication_channel: AuthenticationChannel,
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Default, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct BrowserInfo {
-    pub java_enabled: bool,
-    pub javascript_enabled: bool,
-    pub timezone_offset: i32,
-    pub color_depth: i32,
-    pub screen_width: i32,
-    pub screen_height: i32,
-    pub language: String,
+    pub java_enabled: Option<bool>,
+    pub javascript_enabled: Option<bool>,
+    pub timezone_offset: Option<i32>,
+    pub color_depth: Option<i32>,
+    pub screen_width: Option<i32>,
+    pub screen_height: Option<i32>,
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,14 +136,13 @@ pub struct BrowserInfo {
 pub struct RazorpayPaymentRequest {
     pub amount: MinorUnit,
     pub currency: String,
-    pub contact: String,
-    pub email: String,
+    pub contact: Secret<String>,
+    pub email: Email,
     pub order_id: String,
-    // pub method: String,
-    // #[serde(flatten)]
+    pub method: PaymentMethodType,
     pub card: PaymentMethodSpecificData,
     pub authentication: Option<AuthenticationDetails>,
-    pub browser: BrowserInfo,
+    pub browser: Option<BrowserInfo>,
     pub ip: String,
     pub referer: String,
     pub user_agent: String,
@@ -197,13 +206,56 @@ impl TryFrom<(&Card, Option<Secret<String>>)> for RazorpayPaymentMethod {
         let razorpay_card = RazorpayCard {
             number: card.card_number.clone(),
             expiry_month: card.card_exp_month.clone(),
-            expiry_year: "2031".to_string().into(),
+            expiry_year: card.card_exp_year.clone(),
             cvc: Some(card.card_cvc.clone()),
             holder_name: card_holder_name,
-            brand: Some(CardBrand::Visa),
+            brand: card.card_network.clone(),
             network_payment_reference: None,
         };
         Ok(RazorpayPaymentMethod::RazorpayCard(Box::new(razorpay_card)))
+    }
+}
+
+fn extract_payment_method_and_data(
+    payment_method_data: &PaymentMethodData,
+    customer_name: Option<String>,
+) -> Result<
+    (PaymentMethodType, PaymentMethodSpecificData),
+    hyperswitch_interfaces::errors::ConnectorError,
+> {
+    match payment_method_data {
+        PaymentMethodData::Card(card_data) => {
+            let card_holder_name = customer_name.clone();
+
+            let card = PaymentMethodSpecificData::Card(CardDetails {
+                number: card_data.card_number.clone(),
+                name: card_holder_name,
+                expiry_month: Some(card_data.card_exp_month.clone()),
+                expiry_year: card_data.card_exp_year.clone(),
+                cvv: Some(card_data.card_cvc.clone()),
+            });
+
+            Ok((PaymentMethodType::Card, card))
+        }
+        PaymentMethodData::CardRedirect(_)
+        | PaymentMethodData::Wallet(_)
+        | PaymentMethodData::PayLater(_)
+        | PaymentMethodData::BankRedirect(_)
+        | PaymentMethodData::BankDebit(_)
+        | PaymentMethodData::BankTransfer(_)
+        | PaymentMethodData::Crypto(_)
+        | PaymentMethodData::MandatePayment
+        | PaymentMethodData::Reward
+        | PaymentMethodData::RealTimePayment(_)
+        | PaymentMethodData::Upi(_)
+        | PaymentMethodData::Voucher(_)
+        | PaymentMethodData::GiftCard(_)
+        | PaymentMethodData::CardToken(_)
+        | PaymentMethodData::OpenBanking(_) => Err(
+            hyperswitch_interfaces::errors::ConnectorError::NotImplemented(
+                "Only Card payment method is supported for Razorpay".to_string(),
+            ),
+        ),
     }
 }
 
@@ -230,48 +282,75 @@ impl
             &Card,
         ),
     ) -> Result<Self, Self::Error> {
-        let (item, card_data) = value;
+        let (item, _card_data) = value;
         let amount = item.amount;
         let currency = item.router_data.request.currency.to_string();
 
-        let contact = "9900008989".to_string();
+        let billing = item
+            .router_data
+            .resource_common_data
+            .address
+            .get_payment_billing();
 
-        // let email = item.router_data.request.email.clone().ok_or(
-        //     hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
-        //         field_name: "email",
-        //     },
-        // )?;
-        let email = "sweta.sharma@juspay.in".to_string();
+        let contact = billing
+            .and_then(|billing| billing.phone.as_ref())
+            .and_then(|phone| phone.number.clone())
+            .ok_or(
+                hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
+                    field_name: "contact",
+                },
+            )?;
+
+        let email = item.router_data.request.email.clone().ok_or(
+            hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
+                field_name: "email",
+            },
+        )?;
 
         let order_id = item.router_data.reference_id.clone().ok_or(
             hyperswitch_interfaces::errors::ConnectorError::MissingRequiredField {
-                field_name: "ordeR_id",
+                field_name: "order_id",
             },
         )?;
-        // let order_id = item.router_data.reference_id.clone() ;
-        let _method = "card".to_string();
-        let card_holder_name = "Sweta Sharma".to_string(); // TODO: Remove this hardcoded value
-        let card = PaymentMethodSpecificData::Card(CardDetails {
-            number: card_data.card_number.clone(),
-            name: card_holder_name,
-            expiry_month: card_data.card_exp_month.clone(),
-            expiry_year: "2030".to_string(),
-            cvv: Some(card_data.card_cvc.clone()),
-        });
+
+        let (method, card) = extract_payment_method_and_data(
+            &item.router_data.request.payment_method_data,
+            item.router_data.request.customer_name.clone(),
+        )?;
+
+        let browser_info_opt = item.router_data.request.browser_info.as_ref();
+
+        let authentication_channel = match browser_info_opt {
+            Some(_) => AuthenticationChannel::Browser,
+            None => AuthenticationChannel::App,
+        };
 
         let authentication = Some(AuthenticationDetails {
-            authentication_channel: "browser".to_string(),
+            authentication_channel,
         });
 
-        let browser = BrowserInfo {
-            java_enabled: false,
-            javascript_enabled: false,
-            timezone_offset: 0,
-            color_depth: 24,
-            screen_width: 1920,
-            screen_height: 1080,
-            language: "en-US".to_string(),
-        };
+        let browser = browser_info_opt.map(|info| BrowserInfo {
+            java_enabled: info.java_enabled,
+            javascript_enabled: info.java_script_enabled,
+            timezone_offset: info.time_zone,
+            color_depth: info.color_depth.map(|v| v as i32),
+            screen_width: info.screen_width.map(|v| v as i32),
+            screen_height: info.screen_height.map(|v| v as i32),
+            language: info.language.clone(),
+        });
+
+        let ip = browser_info_opt
+            .and_then(|info| info.ip_address)
+            .map(|ip| ip.to_string())
+            .unwrap_or_default();
+
+        let user_agent = browser_info_opt
+            .and_then(|info| info.user_agent.clone())
+            .unwrap_or_default();
+
+        let referer = browser_info_opt
+            .and_then(|info| info.accept_header.clone())
+            .unwrap_or_default();
 
         Ok(RazorpayPaymentRequest {
             amount,
@@ -279,13 +358,13 @@ impl
             contact,
             email,
             order_id,
-            // method,
+            method,
             card,
             authentication,
             browser,
-            ip: "105.106.107.108".to_string(),
-            referer: "https://merchansite.com/example/paybill".to_string(),
-            user_agent: "Mozilla/5.0".to_string(),
+            ip,
+            referer,
+            user_agent,
         })
     }
 }
@@ -342,45 +421,50 @@ pub enum RazorpayResponse {
     PsyncResponse(RazorpayPsyncResponse),
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayPsyncResponse {
     pub id: String,
-    // pub entity: String,
-    // pub amount: i64,
-    // pub currency: String,
+    pub entity: String,
+    pub amount: i64,
+    pub base_amount: i64,
+    pub currency: String,
+    pub base_currency: String,
     pub status: RazorpayStatus,
-    // pub method: String,
-    // pub order_id: Option<String>,
-    // pub description: Option<String>,
-    // pub international: bool,
-    // pub refund_status: Option<String>,
-    // pub amount_refunded: i64,
-    // pub captured: bool,
-    // pub email: String,
-    // pub contact: String,
-    // pub fee: i64,
-    // pub tax: i64,
-    // pub error_code: Option<String>,
-    // pub error_description: Option<String>,
-    // pub error_source: Option<String>,
-    // pub error_step: Option<String>,
-    // pub error_reason: Option<String>,
-    // pub notes: Option<HashMap<String, String>>,
-    // pub created_at: i64,
-    // pub card_id: Option<String>,
-    // pub card: Option<SyncCardDetails>,
-    // pub upi: Option<SyncUPIDetails>,
-    // pub acquirer_data: Option<Vec<AcquirerData>>,
+    pub method: PaymentMethodType,
+    pub order_id: Option<String>,
+    pub invoice_id: Option<String>,
+    pub description: Option<String>,
+    pub international: bool,
+    pub refund_status: Option<String>,
+    pub amount_refunded: i64,
+    pub captured: bool,
+    pub email: String,
+    pub contact: String,
+    pub fee: Option<i64>,
+    pub tax: Option<i64>,
+    pub error_code: Option<String>,
+    pub error_description: Option<String>,
+    pub error_source: Option<String>,
+    pub error_step: Option<String>,
+    pub error_reason: Option<String>,
+    pub notes: Option<HashMap<String, String>>,
+    pub created_at: i64,
+    pub card_id: Option<String>,
+    pub card: Option<SyncCardDetails>,
+    pub upi: Option<SyncUPIDetails>,
+    pub acquirer_data: Option<AcquirerData>,
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SyncCardDetails {
     pub id: String,
     pub entity: String,
     pub name: String,
-    pub last4: i32,
+    pub last4: String,
     pub network: String,
     pub r#type: String,
     pub issuer: Option<String>,
@@ -397,12 +481,14 @@ pub struct SyncUPIDetails {
     pub bank: String,
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AcquirerData {
-    pub rrn: String,
-    pub authentication_reference_number: String,
-    pub bank_transaction_id: String,
+    pub auth_code: Option<String>,
+    pub rrn: Option<String>,
+    pub authentication_reference_number: Option<String>,
+    pub bank_transaction_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -503,17 +589,8 @@ impl<F, Req>
                         }
                     })?;
 
-                let mut form_fields = HashMap::new();
-                form_fields.insert(
-                    "transaction_id".to_string(),
-                    payment_response.razorpay_payment_id.clone(),
-                );
-                if let Some(next_action) = payment_response.next {
-                    for action in next_action {
-                        form_fields.insert("action".to_string(), action.action);
-                        form_fields.insert("url".to_string(), action.url);
-                    }
-                }
+                let form_fields = HashMap::new();
+
                 let payment_response_data = PaymentsResponseData::TransactionResponse {
                     resource_id: ResponseId::ConnectorTransactionId(
                         payment_response.razorpay_payment_id.clone(),
@@ -575,15 +652,16 @@ pub struct RazorpayErrorResponse {
     pub psp_reference: Option<String>,
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayOrderRequest {
     pub amount: MinorUnit,
     pub currency: String,
     pub receipt: String,
-    // pub partial_payment: Option<bool>,
-    // pub first_payment_min_amount: Option<MinorUnit>,
-    // pub notes: Option<HashMap<String, String>>,
+    pub partial_payment: Option<bool>,
+    pub first_payment_min_amount: Option<MinorUnit>,
+    pub notes: Option<RazorpayNotes>,
 }
 
 impl
@@ -616,27 +694,35 @@ impl
             amount: item.amount,
             currency: request_data.currency.to_string(),
             receipt: uuid::Uuid::new_v4().to_string(),
-            // partial_payment: Some(false),
-            // first_payment_min_amount: None,
-            // notes: None,
+            partial_payment: None,
+            first_payment_min_amount: None,
+            notes: None,
         })
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum RazorpayNotes {
+    Map(HashMap<String, String>),
+    EmptyVec(Vec<()>),
+}
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayOrderResponse {
     pub id: String,
-    // pub entity: String,
-    // pub amount: MinorUnit,
-    // pub amount_paid: MinorUnit,
-    // pub amount_due: MinorUnit,
-    // pub currency: String,
-    // pub receipt: String,
-    // pub status: String,
-    // pub attempts: u32,
-    // pub notes: Option<HashMap<String, String>>,
-    // pub created_at: u64,
+    pub entity: String,
+    pub amount: MinorUnit,
+    pub amount_paid: MinorUnit,
+    pub amount_due: MinorUnit,
+    pub currency: String,
+    pub receipt: String,
+    pub status: String,
+    pub attempts: u32,
+    pub notes: Option<RazorpayNotes>,
+    pub offer_id: Option<String>,
+    pub created_at: u64,
 }
 
 impl
