@@ -516,9 +516,7 @@ impl TryFrom<&ConnectorAuthType> for AdyenAuthType {
 
 impl TryFrom<(&Card, Option<String>)> for AdyenPaymentMethod {
     type Error = hyperswitch_interfaces::errors::ConnectorError;
-    fn try_from(
-        (card, card_holder_name): (&Card, Option<String>),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((card, card_holder_name): (&Card, Option<String>)) -> Result<Self, Self::Error> {
         let adyen_card = AdyenCard {
             number: card.card_number.clone(),
             expiry_month: card.card_exp_month.clone(),
@@ -1129,7 +1127,7 @@ fn is_mandate_payment(
     item: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
 ) -> bool {
     (item.request.setup_future_usage
-            == Some(hyperswitch_common_enums::enums::FutureUsage::OffSession))
+        == Some(hyperswitch_common_enums::enums::FutureUsage::OffSession))
         || item
             .request
             .mandate_id

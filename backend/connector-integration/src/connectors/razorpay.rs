@@ -14,6 +14,8 @@ use hyperswitch_common_utils::{
     types::{AmountConvertor, MinorUnit},
 };
 
+use crate::{with_error_response_body, with_response_body};
+
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use error_stack::ResultExt;
@@ -106,7 +108,7 @@ impl ConnectorCommon for Razorpay {
             .parse_struct("ErrorResponse")
             .map_err(|_| errors::ConnectorError::ResponseDeserializationFailed)?;
 
-        event_builder.map(|i| i.set_error_response_body(&response));
+        with_error_response_body!(event_builder, response);
 
         Ok(ErrorResponse {
             status_code: res.status_code,
@@ -182,7 +184,8 @@ impl ConnectorIntegrationV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, P
             .parse_struct("RazorpayPaymentResponse")
             .map_err(|_| errors::ConnectorError::ResponseDeserializationFailed)?;
 
-        event_builder.map(|i| i.set_response_body(&response));
+        with_response_body!(event_builder, response);
+
         RouterDataV2::foreign_try_from((
             response,
             data.clone(),
@@ -274,7 +277,7 @@ impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsRe
             .parse_struct("RazorpayPaymentResponse")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
 
-        event_builder.map(|i| i.set_response_body(&response));
+        with_response_body!(event_builder, response);
 
         let is_multiple_capture_sync = match data.request.sync_type {
             SyncRequestType::MultipleCaptureSync(_) => true,
@@ -393,7 +396,7 @@ impl
             .parse_struct("RazorpayOrderResponse")
             .map_err(|_| errors::ConnectorError::ResponseDeserializationFailed)?;
 
-        event_builder.map(|i| i.set_response_body(&response));
+        with_response_body!(event_builder, response);
 
         RouterDataV2::foreign_try_from((response, data.clone(), res.status_code, false))
             .change_context(errors::ConnectorError::ResponseHandlingFailed)

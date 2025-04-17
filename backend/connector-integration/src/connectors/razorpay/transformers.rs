@@ -250,12 +250,12 @@ impl
         )?;
         // let order_id = item.router_data.reference_id.clone() ;
         let _method = "card".to_string();
-        let card_holder_name = "Sweta Sharma".to_string().into();
+        let card_holder_name = "Sweta Sharma".to_string(); // TODO: Remove this hardcoded value
         let card = PaymentMethodSpecificData::Card(CardDetails {
             number: card_data.card_number.clone(),
             name: card_holder_name,
             expiry_month: card_data.card_exp_month.clone(),
-            expiry_year: "2030".to_string().into(),
+            expiry_year: "2030".to_string(),
             cvv: Some(card_data.card_cvc.clone()),
         });
 
@@ -407,7 +407,6 @@ pub struct AcquirerData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-
 pub enum RazorpayStatus {
     Created,
     Authorized,
