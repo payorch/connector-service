@@ -105,15 +105,13 @@ impl ForeignTryFrom<grpc_api_types::payments::PaymentMethodData> for PaymentMeth
                     }),
                 ),
             },
-            None => {
-                return Err(ApplicationErrorResponse::BadRequest(ApiError {
-                    sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
-                    error_identifier: 400,
-                    error_message: "Payment method data is required".to_owned(),
-                    error_object: None,
-                })
-                .into());
-            }
+            None => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
+                error_identifier: 400,
+                error_message: "Payment method data is required".to_owned(),
+                error_object: None,
+            })
+            .into()),
         }
     }
 }
@@ -707,7 +705,7 @@ impl ForeignTryFrom<grpc_api_types::payments::AddressDetails>
             city: value.city,
             country: value
                 .country
-                .map(|val| hyperswitch_common_enums::CountryAlpha2::foreign_try_from(val))
+                .map(hyperswitch_common_enums::CountryAlpha2::foreign_try_from)
                 .transpose()?,
             line1: value.line1.map(|val| val.into()),
             line2: value.line2.map(|val| val.into()),
@@ -839,14 +837,10 @@ impl ForeignTryFrom<ResponseId> for grpc_api_types::payments::ResponseId {
     fn foreign_try_from(value: ResponseId) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(match value {
             ResponseId::ConnectorTransactionId(id) => Self {
-                id: Some(
-                    grpc_api_types::payments::response_id::Id::ConnectorTransactionId(id.into()),
-                ),
+                id: Some(grpc_api_types::payments::response_id::Id::ConnectorTransactionId(id)),
             },
             ResponseId::EncodedData(data) => Self {
-                id: Some(grpc_api_types::payments::response_id::Id::EncodedData(
-                    data.into(),
-                )),
+                id: Some(grpc_api_types::payments::response_id::Id::EncodedData(data)),
             },
             ResponseId::NoResponseId => Self {
                 id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
@@ -887,7 +881,7 @@ pub fn generate_payment_authorize_response(
                                     Ok::<grpc_api_types::payments::RedirectForm, ApplicationErrorResponse>(grpc_api_types::payments::RedirectForm {
                                         form_type: Some(grpc_api_types::payments::redirect_form::FormType::Form(
                                             grpc_api_types::payments::FormData {
-                                                endpoint: endpoint.into(),
+                                                endpoint,
                                                 method: 0,
                                                 form_fields: HashMap::default(), //TODO
                                             }
@@ -898,7 +892,7 @@ pub fn generate_payment_authorize_response(
                                     Ok(grpc_api_types::payments::RedirectForm {
                                         form_type: Some(grpc_api_types::payments::redirect_form::FormType::Html(
                                             grpc_api_types::payments::HtmlData {
-                                                html_data: html_data.into(),
+                                                html_data,
                                             }
                                         ))
                                     })
@@ -932,7 +926,7 @@ pub fn generate_payment_authorize_response(
         Err(err) => {
             let status = err
                 .attempt_status
-                .map(|val| grpc_api_types::payments::AttemptStatus::foreign_from(val))
+                .map(grpc_api_types::payments::AttemptStatus::foreign_from)
                 .unwrap_or_default();
             PaymentsAuthorizeResponse {
                 resource_id: Some(grpc_api_types::payments::ResponseId {
@@ -1030,7 +1024,7 @@ impl ForeignFrom<hyperswitch_common_enums::AttemptStatus>
     for grpc_api_types::payments::AttemptStatus
 {
     fn foreign_from(status: hyperswitch_common_enums::AttemptStatus) -> Self {
-        let grpc_status = match status {
+        match status {
             hyperswitch_common_enums::AttemptStatus::Charged => Self::Charged,
             hyperswitch_common_enums::AttemptStatus::Pending => Self::Pending,
             hyperswitch_common_enums::AttemptStatus::Failure => Self::Failure,
@@ -1071,8 +1065,7 @@ impl ForeignFrom<hyperswitch_common_enums::AttemptStatus>
             hyperswitch_common_enums::AttemptStatus::PartialChargedAndChargeable => {
                 Self::PartialChargedAndChargeable
             }
-        };
-        grpc_status
+        }
     }
 }
 
@@ -1121,7 +1114,7 @@ pub fn generate_payment_sync_response(
         Err(e) => {
             let status = e
                 .attempt_status
-                .map(|val| grpc_api_types::payments::AttemptStatus::foreign_from(val))
+                .map(grpc_api_types::payments::AttemptStatus::foreign_from)
                 .unwrap_or_default();
             Ok(PaymentsSyncResponse {
                 resource_id: Some(grpc_api_types::payments::ResponseId {

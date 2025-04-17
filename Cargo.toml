@@ -11,3 +11,9 @@ exclude = [
   "client-sdk/example-tui",
   "client-sdk/example-cli"
 ]
+
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
