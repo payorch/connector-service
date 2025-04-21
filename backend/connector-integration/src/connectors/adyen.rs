@@ -10,9 +10,10 @@ use hyperswitch_common_utils::{
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
     router_data_v2::RouterDataV2,
+    router_request_types::ResponseId,
 };
 
-use error_stack::ResultExt;
+use error_stack::{report, ResultExt};
 use hyperswitch_interfaces::{
     api::{self, ConnectorCommon},
     configs::Connectors,
@@ -26,12 +27,13 @@ use hyperswitch_masking::{Mask, Maskable};
 use domain_types::{
     connector_flow::{Authorize, PSync},
     connector_types::{
-        ConnectorServiceTrait, PaymentAuthorizeV2, PaymentCreateOrderData,
-        PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate, PaymentSyncV2,
-        PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, ValidationTrait,
+        ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
+        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
+        PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+        RequestDetails, ValidationTrait, WebhookDetailsResponse,
     },
 };
-use transformers::{self as adyen, ForeignTryFrom};
+use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
 
 use domain_types::connector_flow::CreateOrder;
 
@@ -213,4 +215,33 @@ impl
         PaymentCreateOrderResponse,
     > for Adyen
 {
+}
+
+impl IncomingWebhook for Adyen {
+    fn proces_payment_webhook(
+        &self,
+        request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<WebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
+        let notif: AdyenNotificationRequestItemWH =
+            match transformers::get_webhook_object_from_body(request.body) {
+                Ok(i) => i,
+                Err(err) => {
+                    return Err(report!(errors::ConnectorError::WebhookBodyDecodingFailed))
+                        .attach_printable_lazy(|| {
+                            format!("error while decoing webhook body {err}")
+                        });
+                }
+            };
+        Ok(WebhookDetailsResponse {
+            resource_id: Some(ResponseId::ConnectorTransactionId(
+                notif.psp_reference.clone(),
+            )),
+            status: transformers::get_adyen_webhook_event(notif.event_code, notif.success),
+            connector_response_reference_id: Some(notif.psp_reference),
+            error_code: notif.reason.clone(),
+            error_message: notif.reason,
+        })
+    }
 }

@@ -4,10 +4,13 @@ use crate::types::Connectors;
 use crate::utils::ForeignTryFrom;
 use hyperswitch_api_models::enums::Currency;
 use hyperswitch_common_utils::types::MinorUnit;
+use hyperswitch_domain_models::router_data::ConnectorAuthType;
 use hyperswitch_domain_models::router_request_types::{ResponseId, SyncRequestType};
+use hyperswitch_interfaces::errors::ConnectorError;
 use hyperswitch_interfaces::{
     api::ConnectorCommon, connector_integration_v2::ConnectorIntegrationV2,
 };
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub enum ConnectorEnum {
@@ -34,7 +37,12 @@ impl ForeignTryFrom<i32> for ConnectorEnum {
 }
 
 pub trait ConnectorServiceTrait:
-    ConnectorCommon + ValidationTrait + PaymentAuthorizeV2 + PaymentSyncV2 + PaymentOrderCreate
+    ConnectorCommon
+    + ValidationTrait
+    + PaymentAuthorizeV2
+    + PaymentSyncV2
+    + PaymentOrderCreate
+    + IncomingWebhook
 {
 }
 
@@ -185,4 +193,110 @@ pub struct PaymentCreateOrderData {
 #[derive(Debug, Clone)]
 pub struct PaymentCreateOrderResponse {
     pub order_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct WebhookDetailsResponse {
+    pub resource_id: Option<ResponseId>,
+    pub status: hyperswitch_common_enums::AttemptStatus,
+    pub connector_response_reference_id: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HttpMethod {
+    Options,
+    Get,
+    Post,
+    Put,
+    Delete,
+    Head,
+    Trace,
+    Connect,
+    Patch,
+}
+
+#[derive(Debug, Clone)]
+pub struct RequestDetails {
+    pub method: Option<HttpMethod>,
+    pub uri: Option<String>,
+    pub headers: HashMap<String, String>,
+    pub body: Vec<u8>,
+    pub query_params: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConnectorWebhookSecrets {
+    pub secret: String,
+    pub additional_secret: Option<String>,
+}
+
+impl ForeignTryFrom<i32> for HttpMethod {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(value: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+        match value {
+            0 => Ok(Self::Get),
+            1 => Ok(Self::Post),
+            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
+                sub_code: "INVALID_HTTP_METHOD".to_owned(),
+                error_identifier: 400,
+                error_message: format!("Invalid HTTP method value: {}", value),
+                error_object: None,
+            })
+            .into()),
+        }
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::RequestDetails> for RequestDetails {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::RequestDetails,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let method = value.method.map(HttpMethod::foreign_try_from).transpose()?;
+
+        Ok(Self {
+            method,
+            uri: value.uri,
+            headers: value.headers,
+            body: value.body,
+            query_params: value.query_params,
+        })
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::ConnectorWebhookSecrets> for ConnectorWebhookSecrets {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::ConnectorWebhookSecrets,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(Self {
+            secret: value.secret,
+            additional_secret: value.additional_secret,
+        })
+    }
+}
+
+pub trait IncomingWebhook {
+    fn verify_webhook_source(
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<bool, error_stack::Report<ConnectorError>> {
+        Ok(false)
+    }
+
+    fn proces_payment_webhook(
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
+        Err(ConnectorError::NotImplemented("proces_payment_webhook".to_string()).into())
+    }
 }

@@ -5,6 +5,7 @@ package ucs.payments;
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
+  rpc IncomingWebhook(IncomingWebhookRequest) returns (PaymentsSyncResponse);
 }
 
 message PaymentsAuthorizeRequest {
@@ -72,6 +73,27 @@ message PaymentsSyncResponse {
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
+  optional bool source_verified = 11;
+}
+
+message IncomingWebhookRequest {
+  Connector connector = 1;
+  RequestDetails request_details = 2;
+  optional ConnectorWebhookSecrets webhook_secrets = 3;
+  optional AuthType auth_creds = 34;
+}
+
+message RequestDetails {
+  optional Method method = 1;
+  optional string uri = 2;
+  map<string, string> headers = 3;
+  bytes body = 4;
+  optional string query_params = 5;
+}
+
+message ConnectorWebhookSecrets {
+  string secret = 1;
+  optional string additional_secret = 2;
 }
 
 // Add these new message and enum types

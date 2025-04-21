@@ -3,6 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use crate::connector_flow::{Authorize, PSync};
 use crate::connector_types::{
     PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+    WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
@@ -1095,6 +1096,7 @@ pub fn generate_payment_sync_response(
                     connector_response_reference_id,
                     error_code: None,
                     error_message: None,
+                    source_verified: None,
                 })
             }
             _ => Err(report!(ApplicationErrorResponse::InternalServerError(
@@ -1123,7 +1125,33 @@ pub fn generate_payment_sync_response(
                 status: status as i32,
                 error_message: Some(e.message),
                 error_code: Some(e.code),
+                source_verified: None,
             })
         }
+    }
+}
+
+impl ForeignTryFrom<(WebhookDetailsResponse, bool)> for PaymentsSyncResponse {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        (value, source_verified): (WebhookDetailsResponse, bool),
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let status = grpc_api_types::payments::AttemptStatus::foreign_from(value.status);
+        Ok(Self {
+            resource_id: value
+                .resource_id
+                .map(|resource_id| {
+                    grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)
+                })
+                .transpose()?,
+            status: status as i32,
+            mandate_reference: None,
+            network_txn_id: None,
+            connector_response_reference_id: value.connector_response_reference_id,
+            error_code: value.error_code,
+            error_message: value.error_message,
+            source_verified: Some(source_verified),
+        })
     }
 }
