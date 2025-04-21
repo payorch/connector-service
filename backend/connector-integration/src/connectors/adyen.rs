@@ -218,7 +218,7 @@ impl
 }
 
 impl IncomingWebhook for Adyen {
-    fn proces_payment_webhook(
+    fn process_payment_webhook(
         &self,
         request: RequestDetails,
         _connector_webhook_secret: Option<ConnectorWebhookSecrets>,

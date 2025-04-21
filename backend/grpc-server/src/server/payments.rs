@@ -448,7 +448,7 @@ impl PaymentService for Payments {
             }
         };
 
-        let webhook_details = match connector_data.connector.proces_payment_webhook(
+        let webhook_details = match connector_data.connector.process_payment_webhook(
             request_details,
             webhook_secrets,
             connector_auth_details,

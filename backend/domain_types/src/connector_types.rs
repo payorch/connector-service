@@ -291,12 +291,12 @@ pub trait IncomingWebhook {
         Ok(false)
     }
 
-    fn proces_payment_webhook(
+    fn process_payment_webhook(
         &self,
         _request: RequestDetails,
         _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
-        Err(ConnectorError::NotImplemented("proces_payment_webhook".to_string()).into())
+        Err(ConnectorError::NotImplemented("process_payment_webhook".to_string()).into())
     }
 }
