@@ -417,8 +417,8 @@ pub struct NextAction {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged, rename_all = "snake_case")]
 pub enum RazorpayResponse {
-    PaymentResponse(RazorpayPaymentResponse),
-    PsyncResponse(RazorpayPsyncResponse),
+    PaymentResponse(Box<RazorpayPaymentResponse>),
+    PsyncResponse(Box<RazorpayPsyncResponse>),
 }
 
 #[serde_with::skip_serializing_none]
