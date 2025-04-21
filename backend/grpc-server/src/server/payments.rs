@@ -155,9 +155,9 @@ impl PaymentService for Payments {
         let auth_creds = match auth_creds {
             Some(auth_creds) => auth_creds,
             None => {
-                return Err(tonic::Status::invalid_argument(format!(
+                return Err(tonic::Status::invalid_argument(
                     "Missing auth_creds in request",
-                )))
+                ))
             }
         };
 
@@ -305,9 +305,9 @@ impl PaymentService for Payments {
         let auth_creds = match auth_creds {
             Some(auth_creds) => auth_creds,
             None => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Missing auth_creds in request",
-                )))
+                return Err(tonic::Status::invalid_argument(
+                    "Missing auth_creds in request".to_string(),
+                ))
             }
         };
 
