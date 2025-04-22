@@ -3,7 +3,9 @@ pub mod transformers;
 use domain_types::{
     connector_flow::{Authorize, PSync},
     connector_types::{
-        ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, RequestDetails, WebhookDetailsResponse
+        ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData,
+        PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+        RequestDetails, WebhookDetailsResponse,
     },
 };
 use hyperswitch_common_utils::{
@@ -418,14 +420,14 @@ impl
     }
 }
 
-
 impl IncomingWebhook for Razorpay {
     fn get_event_type(
-            &self,
-            _request: RequestDetails,
-            _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
-            _connector_account_details: Option<ConnectorAuthType>,
-        ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>> {
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>>
+    {
         Ok(domain_types::connector_types::EventType::Payment)
     }
 
@@ -435,20 +437,13 @@ impl IncomingWebhook for Razorpay {
         _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
-        let notif: PaymentEntity =
-            match transformers::get_webhook_object_from_body(request.body) {
-                Ok(i) => i,
-                Err(err) => {
-                    return Err(report!(errors::ConnectorError::WebhookBodyDecodingFailed))
-                        .attach_printable_lazy(|| {
-                            format!("error while decoing webhook body {err}")
-                        });
-                }
-            };
+        let notif: PaymentEntity = transformers::get_webhook_object_from_body(request.body)
+            .map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
         Ok(WebhookDetailsResponse {
-            resource_id: Some(ResponseId::ConnectorTransactionId(
-                notif.order_id
-            )),
+            resource_id: Some(ResponseId::ConnectorTransactionId(notif.order_id)),
             status: transformers::get_razorpay_webhook_status(notif.entity, notif.status),
             connector_response_reference_id: None,
             error_code: notif.error_code,
@@ -456,5 +451,3 @@ impl IncomingWebhook for Razorpay {
         })
     }
 }
-
-

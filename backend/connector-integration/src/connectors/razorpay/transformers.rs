@@ -4,7 +4,9 @@ use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus, CardNetwork};
 
 use hyperswitch_cards::CardNumber;
-use hyperswitch_common_utils::{ext_traits::ByteSliceExt, pii::Email, request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{
+    ext_traits::ByteSliceExt, pii::Email, request::Method, types::MinorUnit,
+};
 
 use domain_types::{
     connector_flow::{Authorize, CreateOrder},
@@ -772,7 +774,6 @@ impl
     }
 }
 
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayWebhook {
@@ -843,9 +844,8 @@ pub enum RazorpayEntity {
 pub enum RazorpayPaymentStatus {
     Authorized,
     Captured,
-    Failed
+    Failed,
 }
-
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -864,11 +864,9 @@ pub struct RazorpayWebhookCard {
     pub emi: bool,
 }
 
-
 pub fn get_webhook_object_from_body(
     body: Vec<u8>,
 ) -> Result<PaymentEntity, error_stack::Report<errors::ConnectorError>> {
-    
     let webhook: RazorpayWebhook = body
         .parse_struct("RazorpayWebhook")
         .inspect_err(|err| {
@@ -879,8 +877,10 @@ pub fn get_webhook_object_from_body(
     Ok(webhook.payload.payment.entity)
 }
 
-
-pub(crate) fn get_razorpay_webhook_status(entity: RazorpayEntity, status: RazorpayPaymentStatus) -> AttemptStatus {
+pub(crate) fn get_razorpay_webhook_status(
+    entity: RazorpayEntity,
+    status: RazorpayPaymentStatus,
+) -> AttemptStatus {
     match entity {
         RazorpayEntity::Payment => match status {
             RazorpayPaymentStatus::Authorized => AttemptStatus::Authorized,
@@ -889,4 +889,3 @@ pub(crate) fn get_razorpay_webhook_status(entity: RazorpayEntity, status: Razorp
         },
     }
 }
-
