@@ -12,7 +12,7 @@ use crate::{with_error_response_body, with_response_body};
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
     router_data_v2::RouterDataV2,
-    router_request_types::{SyncRequestType, ResponseId},
+    router_request_types::{ResponseId, SyncRequestType},
 };
 
 use error_stack::{report, ResultExt};
@@ -351,11 +351,12 @@ impl
 
 impl IncomingWebhook for Adyen {
     fn get_event_type(
-            &self,
-            _request: RequestDetails,
-            _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
-            _connector_account_details: Option<ConnectorAuthType>,
-        ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>> {
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>>
+    {
         Ok(domain_types::connector_types::EventType::Payment)
     }
 
@@ -366,15 +367,10 @@ impl IncomingWebhook for Adyen {
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
         let notif: AdyenNotificationRequestItemWH =
-            match transformers::get_webhook_object_from_body(request.body) {
-                Ok(i) => i,
-                Err(err) => {
-                    return Err(report!(errors::ConnectorError::WebhookBodyDecodingFailed))
-                        .attach_printable_lazy(|| {
-                            format!("error while decoing webhook body {err}")
-                        });
-                }
-            };
+            transformers::get_webhook_object_from_body(request.body).map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
         Ok(WebhookDetailsResponse {
             resource_id: Some(ResponseId::ConnectorTransactionId(
                 notif.psp_reference.clone(),

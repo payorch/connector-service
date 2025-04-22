@@ -5,7 +5,7 @@ package ucs.payments;
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
-  rpc IncomingWebhook(IncomingWebhookRequest) returns (WebhookResponse);
+  rpc IncomingWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
 }
 
 message PaymentsAuthorizeRequest {
@@ -17,7 +17,7 @@ message PaymentsAuthorizeRequest {
   PaymentMethodData payment_method_data = 14;
   optional string connector_customer = 1;
   PaymentAddress address = 3;
-  AuthenticationType auth_type = 4;
+AuthenticationType auth_type = 4;
   optional bytes connector_meta_data = 5;
   optional AccessToken access_token = 6;
   optional string session_token = 7;
@@ -82,7 +82,7 @@ message IncomingWebhookRequest {
   optional AuthType auth_creds = 34;
 }
 
-message WebhookResponse {
+message IncomingWebhookResponse {
   EventType event_type = 1;
   WebhookResponseContent content = 2;
   bool source_verified = 3;
@@ -99,7 +99,7 @@ message WebhookResponseContent {
 }
 
 message RequestDetails {
-  optional Method method = 1;
+  Method method = 1;
   optional string uri = 2;
   map<string, string> headers = 3;
   bytes body = 4;

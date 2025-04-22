@@ -10,8 +10,8 @@ use domain_types::{
 use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
 use external_services;
 use grpc_api_types::payments::{
-    payment_service_server::PaymentService, IncomingWebhookRequest, PaymentsAuthorizeRequest,
-    PaymentsAuthorizeResponse, PaymentsSyncRequest, PaymentsSyncResponse, WebhookResponse,
+    payment_service_server::PaymentService, IncomingWebhookRequest, IncomingWebhookResponse,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncRequest, PaymentsSyncResponse,
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
@@ -364,147 +364,137 @@ impl PaymentService for Payments {
     async fn incoming_webhook(
         &self,
         request: tonic::Request<IncomingWebhookRequest>,
-    ) -> Result<tonic::Response<WebhookResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<IncomingWebhookResponse>, tonic::Status> {
         let payload = request.into_inner();
 
-        let request_details = match payload
+        let request_details = payload
             .request_details
             .map(|details| domain_types::connector_types::RequestDetails::foreign_try_from(details))
-        {
-            Some(details) => match details {
-                Ok(details) => details,
-                Err(e) => {
-                    return Err(tonic::Status::invalid_argument(format!(
-                        "Invalid request_details in the payload: {}",
-                        e
-                    )))
-                }
-            },
-            None => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "missing request_details in the payload"
-                )))
-            }
-        };
+            .ok_or_else(|| {
+                tonic::Status::invalid_argument("missing request_details in the payload")
+            })?
+            .map_err(|e| {
+                tonic::Status::invalid_argument(format!(
+                    "Invalid request_details in the payload: {}",
+                    e
+                ))
+            })?;
 
-        let webhook_secrets = match payload.webhook_secrets.map(|details| {
-            domain_types::connector_types::ConnectorWebhookSecrets::foreign_try_from(details)
-        }) {
-            Some(details) => match details {
-                Ok(details) => Some(details),
-                Err(e) => {
-                    return Err(tonic::Status::invalid_argument(format!(
-                        "Invalid webhook_secrets in the payload: {}",
-                        e
-                    )))
-                }
-            },
-            None => None,
-        };
+        let webhook_secrets = payload
+            .webhook_secrets
+            .map(|details| {
+                domain_types::connector_types::ConnectorWebhookSecrets::foreign_try_from(details)
+                    .map_err(|e| {
+                        tonic::Status::invalid_argument(format!(
+                            "Invalid webhook_secrets in the payload: {}",
+                            e
+                        ))
+                    })
+            })
+            .transpose()?;
 
-        let connector_auth_details = match payload
+        let connector_auth_details = payload
             .auth_creds
-            .map(|creds| ConnectorAuthType::foreign_try_from(creds))
-        {
-            Some(auth_type) => match auth_type {
-                Ok(auth_type) => Some(auth_type),
-                Err(e) => {
-                    return Err(tonic::Status::invalid_argument(format!(
-                        "Invalid auth_creds in request: {}",
-                        e
-                    )))
-                }
-            },
-            None => None,
-        };
+            .map(|creds| {
+                ConnectorAuthType::foreign_try_from(creds).map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
+                })
+            })
+            .transpose()?;
 
         // Convert connector enum from the request
         let connector =
-            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-            {
-                Ok(connector) => connector,
-                Err(e) => {
-                    return Err(tonic::Status::invalid_argument(format!(
-                        "Invalid connector: {}",
-                        e
-                    )))
-                }
-            };
+            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+                .map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
+                })?;
 
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
 
-        let source_verified = match connector_data.connector.verify_webhook_source(
-            request_details.clone(),
-            webhook_secrets.clone(),
-            connector_auth_details.clone(),
-        ) {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
+        let source_verified = connector_data
+            .connector
+            .verify_webhook_source(
+                request_details.clone(),
+                webhook_secrets.clone(),
+                connector_auth_details.clone(),
+            )
+            .map_err(|e| {
+                tonic::Status::internal(format!(
                     "Connector processing error in verify_webhook_source: {}",
                     e
-                )))
-            }
-        };
+                ))
+            })?;
 
-        let event_type = match connector_data.connector.get_event_type(
-            request_details.clone(),
-            webhook_secrets.clone(),
-            connector_auth_details.clone(),
-        ) {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
+        let event_type = connector_data
+            .connector
+            .get_event_type(
+                request_details.clone(),
+                webhook_secrets.clone(),
+                connector_auth_details.clone(),
+            )
+            .map_err(|e| {
+                tonic::Status::internal(format!(
                     "Connector processing error in get_event_type: {}",
                     e
-                )))
-            }
-        };
+                ))
+            })?;
 
+        // Get content for the webhook based on the event type
         let content = match event_type {
             domain_types::connector_types::EventType::Payment => {
-                let webhook_details = match connector_data.connector.process_payment_webhook(
+                get_payments_webhook_content(
+                    connector_data,
                     request_details,
                     webhook_secrets,
                     connector_auth_details,
-                ) {
-                    Ok(resp) => resp,
-                    Err(e) => {
-                        return Err(tonic::Status::internal(format!(
-                            "Connector processing error in process_payment_webhook: {}",
-                            e
-                        )))
-                    }
-                };
-                // Generate response
-                let response = match PaymentsSyncResponse::foreign_try_from(
-                    webhook_details,
-                ) {
-                    Ok(resp) => resp,
-                    Err(e) => {
-                        return Err(tonic::Status::internal(format!(
-                            "Error while constructing response: {}",
-                            e
-                        )))
-                    }
-                };
-                grpc_api_types::payments::WebhookResponseContent {
-                    content: Some(grpc_api_types::payments::webhook_response_content::Content::PaymentsResponse(
-                        response
-                    )),
-                }
+                )
+                .await?
             }
         };
 
-        let response = WebhookResponse {
+        let response = IncomingWebhookResponse {
             event_type: event_type as i32,
             content: Some(content),
             source_verified,
         };
 
-        info!("WEBHOOK_FLOW: {:?}", response);
-
         Ok(tonic::Response::new(response))
     }
+}
+
+async fn get_payments_webhook_content(
+    connector_data: ConnectorData,
+    request_details: domain_types::connector_types::RequestDetails,
+    webhook_secrets: Option<domain_types::connector_types::ConnectorWebhookSecrets>,
+    connector_auth_details: Option<ConnectorAuthType>,
+) -> Result<grpc_api_types::payments::WebhookResponseContent, tonic::Status> {
+    let webhook_details = match connector_data.connector.process_payment_webhook(
+        request_details,
+        webhook_secrets,
+        connector_auth_details,
+    ) {
+        Ok(resp) => resp,
+        Err(e) => {
+            return Err(tonic::Status::internal(format!(
+                "Connector processing error in process_payment_webhook: {}",
+                e
+            )))
+        }
+    };
+    // Generate response
+    let response = match PaymentsSyncResponse::foreign_try_from(webhook_details) {
+        Ok(resp) => resp,
+        Err(e) => {
+            return Err(tonic::Status::internal(format!(
+                "Error while constructing response: {}",
+                e
+            )))
+        }
+    };
+    Ok(grpc_api_types::payments::WebhookResponseContent {
+        content: Some(
+            grpc_api_types::payments::webhook_response_content::Content::PaymentsResponse(response),
+        ),
+    })
 }

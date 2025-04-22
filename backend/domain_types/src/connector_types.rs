@@ -219,7 +219,7 @@ pub enum HttpMethod {
 
 #[derive(Debug, Clone)]
 pub struct RequestDetails {
-    pub method: Option<HttpMethod>,
+    pub method: HttpMethod,
     pub uri: Option<String>,
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
@@ -249,20 +249,15 @@ impl ForeignTryFrom<grpc_api_types::payments::EventType> for EventType {
     }
 }
 
-impl ForeignTryFrom<i32> for HttpMethod {
+impl ForeignTryFrom<grpc_api_types::payments::Method> for HttpMethod {
     type Error = ApplicationErrorResponse;
 
-    fn foreign_try_from(value: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::Method,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         match value {
-            0 => Ok(Self::Get),
-            1 => Ok(Self::Post),
-            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
-                sub_code: "INVALID_HTTP_METHOD".to_owned(),
-                error_identifier: 400,
-                error_message: format!("Invalid HTTP method value: {}", value),
-                error_object: None,
-            })
-            .into()),
+            grpc_api_types::payments::Method::Get => Ok(Self::Get),
+            grpc_api_types::payments::Method::Post => Ok(Self::Post),
         }
     }
 }
@@ -273,7 +268,7 @@ impl ForeignTryFrom<grpc_api_types::payments::RequestDetails> for RequestDetails
     fn foreign_try_from(
         value: grpc_api_types::payments::RequestDetails,
     ) -> Result<Self, error_stack::Report<Self::Error>> {
-        let method = value.method.map(HttpMethod::foreign_try_from).transpose()?;
+        let method = HttpMethod::foreign_try_from(value.method())?;
 
         Ok(Self {
             method,
@@ -308,15 +303,6 @@ pub trait IncomingWebhook {
         Ok(false)
     }
 
-    fn process_payment_webhook(
-        &self,
-        _request: RequestDetails,
-        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
-        _connector_account_details: Option<ConnectorAuthType>,
-    ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
-        Err(ConnectorError::NotImplemented("process_payment_webhook".to_string()).into())
-    }
-
     fn get_event_type(
         &self,
         _request: RequestDetails,
@@ -324,5 +310,14 @@ pub trait IncomingWebhook {
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<EventType, error_stack::Report<ConnectorError>> {
         Err(ConnectorError::NotImplemented("get_event_type".to_string()).into())
+    }
+
+    fn process_payment_webhook(
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
+        Err(ConnectorError::NotImplemented("process_payment_webhook".to_string()).into())
     }
 }

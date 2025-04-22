@@ -5,7 +5,9 @@ use domain_types::{
 use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
-use hyperswitch_common_utils::{ext_traits::ByteSliceExt, errors::CustomResult, request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{
+    errors::CustomResult, ext_traits::ByteSliceExt, request::Method, types::MinorUnit,
+};
 
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
@@ -1091,28 +1093,28 @@ pub struct AdyenNotificationRequestItemWH {
     pub reason: Option<String>,
 }
 
-fn is_success_scenario(is_success: String) -> bool {
-    is_success.as_str() == "true"
+fn is_success_scenario(is_success: &str) -> bool {
+    is_success == "true"
 }
 
 pub(crate) fn get_adyen_webhook_event(code: WebhookEventCode, is_success: String) -> AttemptStatus {
     match code {
         WebhookEventCode::Authorisation => {
-            if is_success_scenario(is_success) {
+            if is_success_scenario(&is_success) {
                 AttemptStatus::Authorized
             } else {
                 AttemptStatus::Failure
             }
         }
         WebhookEventCode::Cancellation => {
-            if is_success_scenario(is_success) {
+            if is_success_scenario(&is_success) {
                 AttemptStatus::Voided
             } else {
                 AttemptStatus::Authorized
             }
         }
         WebhookEventCode::Capture => {
-            if is_success_scenario(is_success) {
+            if is_success_scenario(&is_success) {
                 AttemptStatus::Charged
             } else {
                 AttemptStatus::Failure
@@ -1145,7 +1147,6 @@ pub fn get_webhook_object_from_body(
         .notification_items
         .drain(..)
         .next()
-        // TODO: ParsingError doesn't seem to be an apt error for this case
         .ok_or(errors::ConnectorError::WebhookBodyDecodingFailed)?;
 
     Ok(item_object.notification_request_item)
