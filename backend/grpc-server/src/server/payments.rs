@@ -10,8 +10,8 @@ use domain_types::{
 use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
 use external_services;
 use grpc_api_types::payments::{
-    payment_service_server::PaymentService, IncomingWebhookRequest, PaymentsAuthorizeRequest,
-    PaymentsAuthorizeResponse, PaymentsSyncRequest, PaymentsSyncResponse, WebhookResponse,
+    payment_service_server::PaymentService, IncomingWebhookRequest, IncomingWebhookResponse,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncRequest, PaymentsSyncResponse,
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
@@ -364,7 +364,7 @@ impl PaymentService for Payments {
     async fn incoming_webhook(
         &self,
         request: tonic::Request<IncomingWebhookRequest>,
-    ) -> Result<tonic::Response<WebhookResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<IncomingWebhookResponse>, tonic::Status> {
         let payload = request.into_inner();
 
         let request_details = match payload
@@ -462,49 +462,61 @@ impl PaymentService for Payments {
             }
         };
 
+        // Get content for the webhook based on the event type
         let content = match event_type {
             domain_types::connector_types::EventType::Payment => {
-                let webhook_details = match connector_data.connector.process_payment_webhook(
+                get_payments_webhook_content(
+                    connector_data,
                     request_details,
                     webhook_secrets,
                     connector_auth_details,
-                ) {
-                    Ok(resp) => resp,
-                    Err(e) => {
-                        return Err(tonic::Status::internal(format!(
-                            "Connector processing error in process_payment_webhook: {}",
-                            e
-                        )))
-                    }
-                };
-                // Generate response
-                let response = match PaymentsSyncResponse::foreign_try_from(
-                    webhook_details,
-                ) {
-                    Ok(resp) => resp,
-                    Err(e) => {
-                        return Err(tonic::Status::internal(format!(
-                            "Error while constructing response: {}",
-                            e
-                        )))
-                    }
-                };
-                grpc_api_types::payments::WebhookResponseContent {
-                    content: Some(grpc_api_types::payments::webhook_response_content::Content::PaymentsResponse(
-                        response
-                    )),
-                }
+                )
+                .await?
             }
         };
 
-        let response = WebhookResponse {
+        let response = IncomingWebhookResponse {
             event_type: event_type as i32,
             content: Some(content),
             source_verified,
         };
 
-        info!("WEBHOOK_FLOW: {:?}", response);
-
         Ok(tonic::Response::new(response))
     }
+}
+
+async fn get_payments_webhook_content(
+    connector_data: ConnectorData,
+    request_details: domain_types::connector_types::RequestDetails,
+    webhook_secrets: Option<domain_types::connector_types::ConnectorWebhookSecrets>,
+    connector_auth_details: Option<ConnectorAuthType>,
+) -> Result<grpc_api_types::payments::WebhookResponseContent, tonic::Status> {
+    let webhook_details = match connector_data.connector.process_payment_webhook(
+        request_details,
+        webhook_secrets,
+        connector_auth_details,
+    ) {
+        Ok(resp) => resp,
+        Err(e) => {
+            return Err(tonic::Status::internal(format!(
+                "Connector processing error in process_payment_webhook: {}",
+                e
+            )))
+        }
+    };
+    // Generate response
+    let response = match PaymentsSyncResponse::foreign_try_from(webhook_details) {
+        Ok(resp) => resp,
+        Err(e) => {
+            return Err(tonic::Status::internal(format!(
+                "Error while constructing response: {}",
+                e
+            )))
+        }
+    };
+    Ok(grpc_api_types::payments::WebhookResponseContent {
+        content: Some(
+            grpc_api_types::payments::webhook_response_content::Content::PaymentsResponse(response),
+        ),
+    })
 }

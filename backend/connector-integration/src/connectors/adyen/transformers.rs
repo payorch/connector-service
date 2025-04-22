@@ -5,7 +5,9 @@ use domain_types::{
 use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
-use hyperswitch_common_utils::{ext_traits::ByteSliceExt, errors::CustomResult, request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{
+    errors::CustomResult, ext_traits::ByteSliceExt, request::Method, types::MinorUnit,
+};
 
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
