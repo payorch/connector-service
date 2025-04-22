@@ -5,7 +5,7 @@ package ucs.payments;
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
-  rpc IncomingWebhook(IncomingWebhookRequest) returns (PaymentsSyncResponse);
+  rpc IncomingWebhook(IncomingWebhookRequest) returns (WebhookResponse);
 }
 
 message PaymentsAuthorizeRequest {
@@ -73,7 +73,6 @@ message PaymentsSyncResponse {
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
-  optional bool source_verified = 11;
 }
 
 message IncomingWebhookRequest {
@@ -81,6 +80,22 @@ message IncomingWebhookRequest {
   RequestDetails request_details = 2;
   optional ConnectorWebhookSecrets webhook_secrets = 3;
   optional AuthType auth_creds = 34;
+}
+
+message WebhookResponse {
+  EventType event_type = 1;
+  WebhookResponseContent content = 2;
+  bool source_verified = 3;
+}
+
+enum EventType {
+  PAYMENT = 0;
+}
+
+message WebhookResponseContent {
+  oneof content {
+    PaymentsSyncResponse payments_response = 1;
+  }
 }
 
 message RequestDetails {

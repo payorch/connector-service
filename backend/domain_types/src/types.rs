@@ -1115,7 +1115,6 @@ pub fn generate_payment_sync_response(
                     connector_response_reference_id,
                     error_code: None,
                     error_message: None,
-                    source_verified: None,
                 })
             }
             _ => Err(report!(ApplicationErrorResponse::InternalServerError(
@@ -1144,17 +1143,16 @@ pub fn generate_payment_sync_response(
                 status: status as i32,
                 error_message: Some(e.message),
                 error_code: Some(e.code),
-                source_verified: None,
             })
         }
     }
 }
 
-impl ForeignTryFrom<(WebhookDetailsResponse, bool)> for PaymentsSyncResponse {
+impl ForeignTryFrom<WebhookDetailsResponse> for PaymentsSyncResponse {
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
-        (value, source_verified): (WebhookDetailsResponse, bool),
+        value: WebhookDetailsResponse,
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         let status = grpc_api_types::payments::AttemptStatus::foreign_from(value.status);
         Ok(Self {
@@ -1170,7 +1168,6 @@ impl ForeignTryFrom<(WebhookDetailsResponse, bool)> for PaymentsSyncResponse {
             connector_response_reference_id: value.connector_response_reference_id,
             error_code: value.error_code,
             error_message: value.error_message,
-            source_verified: Some(source_verified),
         })
     }
 }

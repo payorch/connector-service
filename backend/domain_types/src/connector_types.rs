@@ -232,6 +232,23 @@ pub struct ConnectorWebhookSecrets {
     pub additional_secret: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum EventType {
+    Payment,
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::EventType> for EventType {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::EventType,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        match value {
+            grpc_api_types::payments::EventType::Payment => Ok(Self::Payment),
+        }
+    }
+}
+
 impl ForeignTryFrom<i32> for HttpMethod {
     type Error = ApplicationErrorResponse;
 
@@ -298,5 +315,14 @@ pub trait IncomingWebhook {
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
         Err(ConnectorError::NotImplemented("process_payment_webhook".to_string()).into())
+    }
+
+    fn get_event_type(
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<EventType, error_stack::Report<ConnectorError>> {
+        Err(ConnectorError::NotImplemented("get_event_type".to_string()).into())
     }
 }

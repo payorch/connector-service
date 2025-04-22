@@ -350,6 +350,15 @@ impl
 }
 
 impl IncomingWebhook for Adyen {
+    fn get_event_type(
+            &self,
+            _request: RequestDetails,
+            _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+            _connector_account_details: Option<ConnectorAuthType>,
+        ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>> {
+        Ok(domain_types::connector_types::EventType::Payment)
+    }
+
     fn process_payment_webhook(
         &self,
         request: RequestDetails,
