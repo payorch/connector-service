@@ -1,19 +1,22 @@
 use crate::configs::Config;
 use connector_integration::types::ConnectorData;
 use domain_types::{
-    connector_flow::{Authorize, CreateOrder, PSync},
+    connector_flow::{Authorize, CreateOrder, PSync, RSync},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
-        PaymentsResponseData, PaymentsSyncData,
+        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundsData, RefundsResponseData,
     },
 };
-use domain_types::{types::generate_payment_sync_response, utils::ForeignTryFrom};
+use domain_types::{
+    types::{generate_payment_sync_response, generate_refund_sync_response},
+    utils::ForeignTryFrom,
+};
 use external_services;
 use grpc_api_types::{
     payments::payment_service_server::PaymentService,
     payments::{
         PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncRequest,
-        PaymentsSyncResponse,
+        PaymentsSyncResponse, RefundsSyncRequest, RefundsSyncResponse,
     },
 };
 use hyperswitch_domain_models::{
@@ -352,6 +355,124 @@ impl PaymentService for Payments {
 
         // Generate response
         let sync_response = match generate_payment_sync_response(response) {
+            Ok(resp) => resp,
+            Err(e) => {
+                return Err(tonic::Status::internal(format!(
+                    "Response generation error: {}",
+                    e
+                )))
+            }
+        };
+
+        Ok(tonic::Response::new(sync_response))
+    }
+
+    async fn refund_sync(
+        &self,
+        request: tonic::Request<RefundsSyncRequest>,
+    ) -> Result<tonic::Response<RefundsSyncResponse>, tonic::Status> {
+        info!("REFUND_SYNC_FLOW: initiated");
+
+        let payload = request.into_inner();
+
+        let connector =
+            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+            {
+                Ok(connector) => connector,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid connector: {}",
+                        e
+                    )))
+                }
+            };
+
+        // Get connector data
+        let connector_data = ConnectorData::get_connector_by_name(&connector);
+
+        // Get connector integration
+        let connector_integration: BoxedConnectorIntegrationV2<
+            '_,
+            RSync,
+            RefundFlowData,
+            RefundsData,
+            RefundsResponseData,
+        > = connector_data.connector.get_connector_integration_v2();
+
+        // Extract auth credentials
+        let auth_creds = payload.auth_creds.clone();
+
+        let refund_sync_data = match RefundsData::foreign_try_from(payload.clone()) {
+            Ok(data) => data,
+            Err(e) => {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid request data: {}",
+                    e
+                )))
+            }
+        };
+
+        // Create common request data
+        let payment_flow_data = match RefundFlowData::foreign_try_from((
+            payload.clone(),
+            self.config.connectors.clone(),
+        )) {
+            Ok(data) => data,
+            Err(e) => {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid flow data: {}",
+                    e
+                )))
+            }
+        };
+
+        let auth_creds = match auth_creds {
+            Some(auth_creds) => auth_creds,
+            None => {
+                return Err(tonic::Status::invalid_argument(
+                    "Missing auth_creds in request".to_string(),
+                ))
+            }
+        };
+
+        let connector_auth_details = match ConnectorAuthType::foreign_try_from(auth_creds) {
+            Ok(auth_type) => auth_type,
+            Err(e) => {
+                return Err(tonic::Status::invalid_argument(format!(
+                    "Invalid auth_creds in request: {}",
+                    e
+                )))
+            }
+        };
+
+        // Create router data
+        let router_data: RouterDataV2<RSync, RefundFlowData, RefundsData, RefundsResponseData> =
+            RouterDataV2 {
+                flow: std::marker::PhantomData,
+                resource_common_data: payment_flow_data,
+                connector_auth_type: connector_auth_details,
+                request: refund_sync_data,
+                response: Err(ErrorResponse::default()),
+            };
+
+        let response = match external_services::service::execute_connector_processing_step(
+            &self.config.proxy,
+            connector_integration,
+            router_data,
+        )
+        .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                return Err(tonic::Status::internal(format!(
+                    "Connector processing error: {}",
+                    e
+                )))
+            }
+        };
+
+        // Generate response
+        let sync_response = match generate_refund_sync_response(response) {
             Ok(resp) => resp,
             Err(e) => {
                 return Err(tonic::Status::internal(format!(

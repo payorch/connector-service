@@ -5,6 +5,7 @@ package ucs.payments;
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
+  rpc RefundSync(RefundsSyncRequest) returns (RefundsSyncResponse);
 }
 
 message PaymentsAuthorizeRequest {
@@ -68,6 +69,22 @@ message PaymentsSyncResponse {
   ResponseId resource_id = 1;
   AttemptStatus status = 2;
   optional MandateReference mandate_reference = 3;
+  optional string network_txn_id = 4;
+  optional string connector_response_reference_id = 5;
+  optional string error_code = 9;
+  optional string error_message = 10;
+}
+
+message RefundsSyncRequest {
+  Connector connector = 35;
+  AuthType auth_creds = 34;
+  string resource_id = 1;
+  optional string connector_request_reference_id = 2;
+}
+
+message RefundsSyncResponse {
+  ResponseId resource_id = 1;
+  AttemptStatus status = 2;
   optional string network_txn_id = 4;
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;

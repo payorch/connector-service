@@ -1,15 +1,16 @@
 use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
-use crate::connector_flow::{Authorize, PSync};
+use crate::connector_flow::{Authorize, PSync, RSync};
 use crate::connector_types::{
-    PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+    PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, RefundFlowData,
+    RefundsData, RefundsResponseData,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
-    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse, RefundsSyncResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
@@ -1142,6 +1143,123 @@ pub fn generate_payment_sync_response(
                 status: status as i32,
                 error_message: Some(e.message),
                 error_code: Some(e.code),
+            })
+        }
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::RefundsSyncRequest> for RefundsData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::RefundsSyncRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        // Default currency to USD for now (you might want to get this from somewhere else)
+        let currency = hyperswitch_common_enums::Currency::USD;
+
+        // Default amount to 0
+        let amount = hyperswitch_common_utils::types::MinorUnit::new(0);
+
+        Ok(RefundsData {
+            refund_id: "REFUND_ID".to_string(),
+            connector_transaction_id: value.resource_id.clone(),
+            connector_refund_id: Some(value.resource_id.clone()),
+            currency,
+            payment_amount: 0,
+            reason: Some("SOME_REASON".to_string()),
+            webhook_url: None,
+            refund_amount: 0,
+            connector_metadata: None,
+            refund_connector_metadata: None,
+            minor_payment_amount: amount,
+            minor_refund_amount: amount,
+            refund_status: hyperswitch_common_enums::RefundStatus::Pending,
+            merchant_account_id: None,
+            merchant_config_currency: Some(currency),
+            capture_method: None,
+        })
+    }
+}
+
+impl ForeignTryFrom<(grpc_api_types::payments::RefundsSyncRequest, Connectors)> for RefundFlowData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        (value, _connectors): (grpc_api_types::payments::RefundsSyncRequest, Connectors),
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(RefundFlowData {
+            merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
+            customer_id: None,
+            payment_id: "PAYMENT_ID".to_string(),
+            attempt_id: "ATTEMPT_ID".to_string(),
+            status: hyperswitch_common_enums::AttemptStatus::Pending,
+            payment_method: hyperswitch_common_enums::PaymentMethod::Card, // Default,
+            connector_meta_data: None,
+            amount_captured: None,
+            minor_amount_captured: None,
+            connector_request_reference_id: value
+                .connector_request_reference_id
+                .clone()
+                .unwrap_or_else(|| "default_reference_id".to_string()),
+            refund_id: value
+                .connector_request_reference_id
+                .clone()
+                .unwrap_or_else(|| "default_reference_id".to_string()),
+        })
+    }
+}
+
+pub fn generate_refund_sync_response(
+    router_data_v2: RouterDataV2<RSync, RefundFlowData, RefundsData, RefundsResponseData>,
+) -> Result<RefundsSyncResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let transaction_response = router_data_v2.response;
+
+    match transaction_response {
+        Ok(response) => {
+            let status = router_data_v2.resource_common_data.status;
+            let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
+
+            let grpc_resource_id = grpc_api_types::payments::ResponseId::foreign_try_from(
+                response.connector_refund_id.clone(),
+            )?;
+
+            Ok(RefundsSyncResponse {
+                resource_id: Some(grpc_resource_id),
+                status: grpc_status as i32,
+                network_txn_id: None,
+                connector_response_reference_id: Some(
+                    response
+                        .connector_refund_id
+                        .clone()
+                        .get_connector_transaction_id()
+                        .change_context(ApplicationErrorResponse::BadRequest(ApiError {
+                            sub_code: "INVALID_REFUND_ID".to_owned(),
+                            error_identifier: 400,
+                            error_message: "Refund Id is invalid".to_owned(),
+                            error_object: None,
+                        }))?,
+                ),
+                error_code: None,
+                error_message: None,
+            })
+        }
+        Err(e) => {
+            let status = e
+                .attempt_status
+                .map(grpc_api_types::payments::AttemptStatus::foreign_from)
+                .unwrap_or_default();
+
+            Ok(RefundsSyncResponse {
+                resource_id: Some(grpc_api_types::payments::ResponseId {
+                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                        false,
+                    )),
+                }),
+                status: status as i32,
+                network_txn_id: None,
+                connector_response_reference_id: e.connector_transaction_id,
+                error_code: Some(e.message),
+                error_message: Some(e.code),
             })
         }
     }

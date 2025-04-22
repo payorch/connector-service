@@ -1,10 +1,11 @@
 pub mod transformers;
 
 use domain_types::{
-    connector_flow::{Authorize, PSync},
+    connector_flow::{Authorize, PSync, RSync},
     connector_types::{
         PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData,
-        PaymentsResponseData, PaymentsSyncData,
+        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncV2, RefundsData,
+        RefundsResponseData,
     },
 };
 use hyperswitch_common_utils::{
@@ -65,6 +66,7 @@ impl ConnectorServiceTrait for Razorpay {}
 impl PaymentAuthorizeV2 for Razorpay {}
 impl PaymentSyncV2 for Razorpay {}
 impl PaymentOrderCreate for Razorpay {}
+impl RefundSyncV2 for Razorpay {}
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
@@ -418,3 +420,5 @@ impl
         self.build_error_response(res, event_builder)
     }
 }
+
+impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundsData, RefundsResponseData> for Razorpay {}
