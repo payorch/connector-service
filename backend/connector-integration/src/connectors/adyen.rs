@@ -32,7 +32,7 @@ use domain_types::{
         ConnectorServiceTrait, PaymentAuthorizeV2, PaymentCreateOrderData,
         PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate, PaymentSyncV2,
         PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, RefundFlowData,
-        RefundSyncV2, RefundsData, RefundsResponseData, ValidationTrait,
+        RefundSyncV2, RefundSyncData, RefundsResponseData, ValidationTrait,
     },
 };
 use transformers::{self as adyen, ForeignTryFrom};
@@ -350,4 +350,4 @@ impl
 {
 }
 
-impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundsData, RefundsResponseData> for Adyen {}
+impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData> for Adyen {}

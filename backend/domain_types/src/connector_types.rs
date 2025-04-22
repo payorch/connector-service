@@ -193,47 +193,33 @@ pub struct PaymentCreateOrderResponse {
 }
 
 pub trait RefundSyncV2:
-    ConnectorIntegrationV2<RSync, RefundFlowData, RefundsData, RefundsResponseData>
+    ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>
 {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct RefundsData {
-    pub refund_id: String,
+pub struct RefundSyncData {
     pub connector_transaction_id: String,
     pub connector_refund_id: Option<String>,
-    pub currency: hyperswitch_common_enums::Currency,
-    pub payment_amount: i64,
     pub reason: Option<String>,
-    pub webhook_url: Option<String>,
-    pub refund_amount: i64,
-    pub connector_metadata: Option<serde_json::Value>,
     pub refund_connector_metadata: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
-    pub minor_payment_amount: MinorUnit,
-    pub minor_refund_amount: MinorUnit,
     pub refund_status: hyperswitch_common_enums::RefundStatus,
-    pub merchant_account_id: Option<String>,
-    pub merchant_config_currency: Option<hyperswitch_common_enums::Currency>,
-    pub capture_method: Option<hyperswitch_common_enums::CaptureMethod>,
 }
 
 #[derive(Debug, Clone)]
 pub struct RefundsResponseData {
-    pub connector_refund_id: ResponseId,
+    pub connector_refund_id: String,
     pub refund_status: hyperswitch_common_enums::RefundStatus,
 }
 
 #[derive(Debug, Clone)]
 pub struct RefundFlowData {
-    pub merchant_id: hyperswitch_common_utils::id_type::MerchantId,
-    pub customer_id: Option<hyperswitch_common_utils::id_type::CustomerId>,
-    pub payment_id: String,
-    pub attempt_id: String,
-    pub status: hyperswitch_common_enums::AttemptStatus,
+    pub status: hyperswitch_common_enums::RefundStatus,
     pub payment_method: hyperswitch_common_enums::PaymentMethod,
     pub connector_meta_data: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
     pub amount_captured: Option<i64>,
     pub minor_amount_captured: Option<MinorUnit>,
     pub connector_request_reference_id: String,
     pub refund_id: String,
+    pub connectors: Connectors,
 }
