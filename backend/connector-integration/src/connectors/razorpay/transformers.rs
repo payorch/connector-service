@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
+use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus, CardNetwork};
 
 use hyperswitch_cards::CardNumber;
-use hyperswitch_common_utils::{pii::Email, request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{ext_traits::ByteSliceExt, pii::Email, request::Method, types::MinorUnit};
 
 use domain_types::{
     connector_flow::{Authorize, CreateOrder},
@@ -19,6 +20,7 @@ use hyperswitch_domain_models::{
     router_request_types::ResponseId,
     router_response_types::RedirectForm,
 };
+use hyperswitch_interfaces::errors;
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
 
@@ -769,3 +771,122 @@ impl
         })
     }
 }
+
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RazorpayWebhook {
+    pub account_id: String,
+    pub contains: Vec<String>,
+    pub created_at: i64,
+    pub entity: String,
+    pub event: String,
+    pub payload: Payload,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Payload {
+    pub payment: PaymentWrapper,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PaymentWrapper {
+    pub entity: PaymentEntity,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PaymentEntity {
+    pub id: String,
+    pub entity: RazorpayEntity,
+    pub amount: i64,
+    pub currency: String,
+    pub status: RazorpayPaymentStatus,
+    pub order_id: String,
+    pub invoice_id: Option<String>,
+    pub international: bool,
+    pub method: String,
+    pub amount_refunded: i64,
+    pub refund_status: Option<String>,
+    pub captured: bool,
+    pub description: Option<String>,
+    pub card_id: Option<String>,
+    pub bank: Option<String>,
+    pub wallet: Option<String>,
+    pub vpa: Option<String>,
+    pub email: Option<String>,
+    pub contact: Option<String>,
+    pub notes: Vec<String>,
+    pub fee: Option<i64>,
+    pub tax: Option<i64>,
+    pub created_at: i64,
+    pub error_code: Option<String>,
+    pub error_description: Option<String>,
+    pub error_reason: Option<String>,
+    pub error_source: Option<String>,
+    pub error_step: Option<String>,
+    pub acquirer_data: Option<AcquirerData>,
+    pub card: Option<RazorpayWebhookCard>,
+    pub token_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RazorpayEntity {
+    Payment,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RazorpayPaymentStatus {
+    Authorized,
+    Captured,
+    Failed
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RazorpayWebhookCard {
+    pub id: String,
+    pub entity: String,
+    pub name: String,
+    pub last4: String,
+    pub network: String,
+    #[serde(rename = "type")]
+    pub card_type: String,
+    pub sub_type: String,
+    pub issuer: Option<String>,
+    pub international: bool,
+    pub iin: String,
+    pub emi: bool,
+}
+
+
+pub fn get_webhook_object_from_body(
+    body: Vec<u8>,
+) -> Result<PaymentEntity, error_stack::Report<errors::ConnectorError>> {
+    
+    let webhook: RazorpayWebhook = body
+        .parse_struct("RazorpayWebhook")
+        .inspect_err(|err| {
+            println!("$$$ Failed to parse RazorpayWebhook: {:?}", err);
+        })
+        .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+
+    Ok(webhook.payload.payment.entity)
+}
+
+
+pub(crate) fn get_razorpay_webhook_status(entity: RazorpayEntity, status: RazorpayPaymentStatus) -> AttemptStatus {
+    match entity {
+        RazorpayEntity::Payment => match status {
+            RazorpayPaymentStatus::Authorized => AttemptStatus::Authorized,
+            RazorpayPaymentStatus::Captured => AttemptStatus::Charged,
+            RazorpayPaymentStatus::Failed => AttemptStatus::AuthorizationFailed,
+        },
+    }
+}
+
