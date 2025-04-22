@@ -249,20 +249,15 @@ impl ForeignTryFrom<grpc_api_types::payments::EventType> for EventType {
     }
 }
 
-impl ForeignTryFrom<i32> for HttpMethod {
+impl ForeignTryFrom<grpc_api_types::payments::Method> for HttpMethod {
     type Error = ApplicationErrorResponse;
 
-    fn foreign_try_from(value: i32) -> Result<Self, error_stack::Report<Self::Error>> {
+    fn foreign_try_from(
+        value: grpc_api_types::payments::Method,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
         match value {
-            0 => Ok(Self::Get),
-            1 => Ok(Self::Post),
-            _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
-                sub_code: "INVALID_HTTP_METHOD".to_owned(),
-                error_identifier: 400,
-                error_message: format!("Invalid HTTP method value: {}", value),
-                error_object: None,
-            })
-            .into()),
+            grpc_api_types::payments::Method::Get => Ok(Self::Get),
+            grpc_api_types::payments::Method::Post => Ok(Self::Post),
         }
     }
 }
@@ -273,7 +268,7 @@ impl ForeignTryFrom<grpc_api_types::payments::RequestDetails> for RequestDetails
     fn foreign_try_from(
         value: grpc_api_types::payments::RequestDetails,
     ) -> Result<Self, error_stack::Report<Self::Error>> {
-        let method = HttpMethod::foreign_try_from(value.method)?;
+        let method = HttpMethod::foreign_try_from(value.method())?;
 
         Ok(Self {
             method,

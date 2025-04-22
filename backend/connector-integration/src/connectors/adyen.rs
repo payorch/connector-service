@@ -367,15 +367,10 @@ impl IncomingWebhook for Adyen {
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
         let notif: AdyenNotificationRequestItemWH =
-            match transformers::get_webhook_object_from_body(request.body) {
-                Ok(i) => i,
-                Err(err) => {
-                    return Err(report!(errors::ConnectorError::WebhookBodyDecodingFailed))
-                        .attach_printable_lazy(|| {
-                            format!("error while decoing webhook body {err}")
-                        });
-                }
-            };
+            transformers::get_webhook_object_from_body(request.body).map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
         Ok(WebhookDetailsResponse {
             resource_id: Some(ResponseId::ConnectorTransactionId(
                 notif.psp_reference.clone(),
