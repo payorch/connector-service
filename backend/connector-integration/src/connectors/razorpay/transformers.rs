@@ -869,9 +869,6 @@ pub fn get_webhook_object_from_body(
 ) -> Result<PaymentEntity, error_stack::Report<errors::ConnectorError>> {
     let webhook: RazorpayWebhook = body
         .parse_struct("RazorpayWebhook")
-        .inspect_err(|err| {
-            println!("$$$ Failed to parse RazorpayWebhook: {:?}", err);
-        })
         .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
 
     Ok(webhook.payload.payment.entity)
