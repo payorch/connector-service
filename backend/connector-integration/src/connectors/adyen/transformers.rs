@@ -2,9 +2,12 @@ use domain_types::{
     connector_flow::Authorize,
     connector_types::{PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData},
 };
+use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus};
 
-use hyperswitch_common_utils::{errors::CustomResult, request::Method, types::MinorUnit};
+use hyperswitch_common_utils::{
+    errors::CustomResult, ext_traits::ByteSliceExt, request::Method, types::MinorUnit,
+};
 
 use hyperswitch_domain_models::{
     payment_method_data::{Card, PaymentMethodData},
@@ -1066,6 +1069,87 @@ pub struct AdyenErrorResponse {
     pub message: String,
     pub error_type: String,
     pub psp_reference: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, strum::Display, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum WebhookEventCode {
+    Authorisation,
+    Cancellation,
+    Capture,
+    CaptureFailed,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenNotificationRequestItemWH {
+    pub original_reference: Option<String>,
+    pub psp_reference: String,
+    pub event_code: WebhookEventCode,
+    pub merchant_account_code: String,
+    pub merchant_reference: String,
+    pub success: String,
+    pub reason: Option<String>,
+}
+
+fn is_success_scenario(is_success: &str) -> bool {
+    is_success == "true"
+}
+
+pub(crate) fn get_adyen_webhook_event(code: WebhookEventCode, is_success: String) -> AttemptStatus {
+    match code {
+        WebhookEventCode::Authorisation => {
+            if is_success_scenario(&is_success) {
+                AttemptStatus::Authorized
+            } else {
+                AttemptStatus::Failure
+            }
+        }
+        WebhookEventCode::Cancellation => {
+            if is_success_scenario(&is_success) {
+                AttemptStatus::Voided
+            } else {
+                AttemptStatus::Authorized
+            }
+        }
+        WebhookEventCode::Capture => {
+            if is_success_scenario(&is_success) {
+                AttemptStatus::Charged
+            } else {
+                AttemptStatus::Failure
+            }
+        }
+        WebhookEventCode::CaptureFailed => AttemptStatus::Failure,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct AdyenItemObjectWH {
+    pub notification_request_item: AdyenNotificationRequestItemWH,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenIncomingWebhook {
+    pub notification_items: Vec<AdyenItemObjectWH>,
+}
+
+pub fn get_webhook_object_from_body(
+    body: Vec<u8>,
+) -> Result<AdyenNotificationRequestItemWH, error_stack::Report<errors::ConnectorError>> {
+    let mut webhook: AdyenIncomingWebhook = body
+        .parse_struct("AdyenIncomingWebhook")
+        .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+
+    let item_object = webhook
+        .notification_items
+        .drain(..)
+        .next()
+        .ok_or(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+
+    Ok(item_object.notification_request_item)
 }
 
 fn build_shopper_reference(

@@ -3,7 +3,7 @@ pub mod transformers;
 use domain_types::{
     connector_flow::{Authorize, PSync, RSync},
     connector_types::{
-        PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData,
+        IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData,
         PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncV2, RefundSyncData,
         RefundsResponseData,
     },
@@ -67,6 +67,7 @@ impl PaymentAuthorizeV2 for Razorpay {}
 impl PaymentSyncV2 for Razorpay {}
 impl PaymentOrderCreate for Razorpay {}
 impl RefundSyncV2 for Razorpay {}
+impl IncomingWebhook for Razorpay {}
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
