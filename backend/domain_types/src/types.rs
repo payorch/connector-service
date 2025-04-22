@@ -4,6 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 use crate::connector_flow::{Authorize, PSync};
 use crate::connector_types::{
     PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+    WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
@@ -1144,5 +1145,29 @@ pub fn generate_payment_sync_response(
                 error_code: Some(e.code),
             })
         }
+    }
+}
+
+impl ForeignTryFrom<WebhookDetailsResponse> for PaymentsSyncResponse {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: WebhookDetailsResponse,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let status = grpc_api_types::payments::AttemptStatus::foreign_from(value.status);
+        Ok(Self {
+            resource_id: value
+                .resource_id
+                .map(|resource_id| {
+                    grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)
+                })
+                .transpose()?,
+            status: status as i32,
+            mandate_reference: None,
+            network_txn_id: None,
+            connector_response_reference_id: value.connector_response_reference_id,
+            error_code: value.error_code,
+            error_message: value.error_message,
+        })
     }
 }

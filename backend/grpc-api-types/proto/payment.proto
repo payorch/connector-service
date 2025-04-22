@@ -5,6 +5,7 @@ package ucs.payments;
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
+  rpc IncomingWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
 }
 
 message PaymentsAuthorizeRequest {
@@ -16,7 +17,7 @@ message PaymentsAuthorizeRequest {
   PaymentMethodData payment_method_data = 14;
   optional string connector_customer = 1;
   PaymentAddress address = 3;
-  AuthenticationType auth_type = 4;
+AuthenticationType auth_type = 4;
   optional bytes connector_meta_data = 5;
   optional AccessToken access_token = 6;
   optional string session_token = 7;
@@ -72,6 +73,42 @@ message PaymentsSyncResponse {
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
+}
+
+message IncomingWebhookRequest {
+  Connector connector = 1;
+  RequestDetails request_details = 2;
+  optional ConnectorWebhookSecrets webhook_secrets = 3;
+  optional AuthType auth_creds = 34;
+}
+
+message IncomingWebhookResponse {
+  EventType event_type = 1;
+  WebhookResponseContent content = 2;
+  bool source_verified = 3;
+}
+
+enum EventType {
+  PAYMENT = 0;
+}
+
+message WebhookResponseContent {
+  oneof content {
+    PaymentsSyncResponse payments_response = 1;
+  }
+}
+
+message RequestDetails {
+  Method method = 1;
+  optional string uri = 2;
+  map<string, string> headers = 3;
+  bytes body = 4;
+  optional string query_params = 5;
+}
+
+message ConnectorWebhookSecrets {
+  string secret = 1;
+  optional string additional_secret = 2;
 }
 
 // Add these new message and enum types
