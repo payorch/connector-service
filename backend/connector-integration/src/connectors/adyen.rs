@@ -27,12 +27,13 @@ use hyperswitch_interfaces::{
 use hyperswitch_masking::{Mask, Maskable};
 
 use domain_types::{
-    connector_flow::{Authorize, PSync},
+    connector_flow::{Authorize, PSync, RSync},
     connector_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RequestDetails, ValidationTrait, WebhookDetailsResponse,
+        RefundFlowData, RefundSyncData, RefundSyncV2, RefundsResponseData, RequestDetails,
+        ValidationTrait, WebhookDetailsResponse,
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
@@ -47,6 +48,7 @@ pub(crate) mod headers {
 impl ConnectorServiceTrait for Adyen {}
 impl PaymentAuthorizeV2 for Adyen {}
 impl PaymentSyncV2 for Adyen {}
+impl RefundSyncV2 for Adyen {}
 
 #[derive(Clone)]
 pub struct Adyen {
@@ -348,6 +350,8 @@ impl
     > for Adyen
 {
 }
+
+impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData> for Adyen {}
 
 impl IncomingWebhook for Adyen {
     fn get_event_type(

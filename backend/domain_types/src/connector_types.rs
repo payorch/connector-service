@@ -1,4 +1,4 @@
-use crate::connector_flow::{self, Authorize, PSync};
+use crate::connector_flow::{self, Authorize, PSync, RSync};
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::Connectors;
 use crate::utils::ForeignTryFrom;
@@ -42,6 +42,7 @@ pub trait ConnectorServiceTrait:
     + PaymentAuthorizeV2
     + PaymentSyncV2
     + PaymentOrderCreate
+    + RefundSyncV2
     + IncomingWebhook
 {
 }
@@ -193,6 +194,38 @@ pub struct PaymentCreateOrderData {
 #[derive(Debug, Clone)]
 pub struct PaymentCreateOrderResponse {
     pub order_id: String,
+}
+
+pub trait RefundSyncV2:
+    ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>
+{
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct RefundSyncData {
+    pub connector_transaction_id: String,
+    pub connector_refund_id: String,
+    pub reason: Option<String>,
+    pub refund_connector_metadata: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
+    pub refund_status: hyperswitch_common_enums::RefundStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct RefundsResponseData {
+    pub connector_refund_id: String,
+    pub refund_status: hyperswitch_common_enums::RefundStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct RefundFlowData {
+    pub status: hyperswitch_common_enums::RefundStatus,
+    pub payment_method: hyperswitch_common_enums::PaymentMethod,
+    pub connector_meta_data: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
+    pub amount_captured: Option<i64>,
+    pub minor_amount_captured: Option<MinorUnit>,
+    pub connector_request_reference_id: String,
+    pub refund_id: String,
+    pub connectors: Connectors,
 }
 
 #[derive(Debug, Clone)]

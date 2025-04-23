@@ -5,6 +5,7 @@ package ucs.payments;
 service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
+  rpc RefundSync(RefundsSyncRequest) returns (RefundsSyncResponse);
   rpc IncomingWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
 }
 
@@ -70,6 +71,22 @@ message PaymentsSyncResponse {
   AttemptStatus status = 2;
   optional MandateReference mandate_reference = 3;
   optional string network_txn_id = 4;
+  optional string connector_response_reference_id = 5;
+  optional string error_code = 9;
+  optional string error_message = 10;
+}
+
+message RefundsSyncRequest {
+  Connector connector = 35;
+  AuthType auth_creds = 34;
+  string connector_refund_id = 2;
+  string connector_transaction_id = 1;
+  optional string refund_reason = 3;
+}
+
+message RefundsSyncResponse {
+  optional string connector_refund_id = 1;
+  RefundStatus status = 2;
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
@@ -966,4 +983,12 @@ enum AttemptStatus {
   PAYMENT_METHOD_AWAITED = 21;
   CONFIRMATION_AWAITED = 22;
   DEVICE_DATA_COLLECTION_PENDING = 23;
+}
+
+enum RefundStatus {
+  REFUND_FAILURE = 0;
+  REFUND_MANUAL_REVIEW = 1;
+  REFUND_PENDING = 2;
+  REFUND_SUCCESS = 3;
+  REFUND_TRANSACTION_FAILURE = 4;
 }
