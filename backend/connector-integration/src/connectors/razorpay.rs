@@ -3,8 +3,9 @@ pub mod transformers;
 use domain_types::{
     connector_flow::{Authorize, PSync},
     connector_types::{
-        IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData,
-        PaymentsResponseData, PaymentsSyncData,
+        ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData,
+        PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
+        RequestDetails, WebhookDetailsResponse,
     },
 };
 use hyperswitch_common_utils::{
@@ -18,11 +19,11 @@ use crate::{with_error_response_body, with_response_body};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use error_stack::ResultExt;
+use error_stack::{report, ResultExt};
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
     router_data_v2::RouterDataV2,
-    router_request_types::SyncRequestType,
+    router_request_types::{ResponseId, SyncRequestType},
 };
 use hyperswitch_interfaces::{
     api::{self, CaptureSyncMethod, ConnectorCommon},
@@ -34,7 +35,7 @@ use hyperswitch_interfaces::{
 };
 use hyperswitch_masking::{Mask, Maskable, PeekInterface};
 
-use transformers::{self as razorpay, ForeignTryFrom};
+use transformers::{self as razorpay, ForeignTryFrom, PaymentEntity};
 
 use domain_types::{
     connector_flow::CreateOrder,
@@ -65,7 +66,6 @@ impl ConnectorServiceTrait for Razorpay {}
 impl PaymentAuthorizeV2 for Razorpay {}
 impl PaymentSyncV2 for Razorpay {}
 impl PaymentOrderCreate for Razorpay {}
-impl IncomingWebhook for Razorpay {}
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
@@ -417,5 +417,37 @@ impl
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
         self.build_error_response(res, event_builder)
+    }
+}
+
+impl IncomingWebhook for Razorpay {
+    fn get_event_type(
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>>
+    {
+        Ok(domain_types::connector_types::EventType::Payment)
+    }
+
+    fn process_payment_webhook(
+        &self,
+        request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<WebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
+        let notif: PaymentEntity = transformers::get_webhook_object_from_body(request.body)
+            .map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
+        Ok(WebhookDetailsResponse {
+            resource_id: Some(ResponseId::ConnectorTransactionId(notif.order_id)),
+            status: transformers::get_razorpay_webhook_status(notif.entity, notif.status),
+            connector_response_reference_id: None,
+            error_code: notif.error_code,
+            error_message: notif.error_reason,
+        })
     }
 }
