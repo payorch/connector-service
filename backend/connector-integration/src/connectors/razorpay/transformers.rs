@@ -6,10 +6,10 @@ use hyperswitch_cards::CardNumber;
 use hyperswitch_common_utils::{pii::Email, request::Method, types::MinorUnit};
 
 use domain_types::{
-    connector_flow::{Authorize, CreateOrder},
+    connector_flow::{Authorize, CreateOrder, RSync},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
-        PaymentsResponseData,
+        PaymentsResponseData, RefundFlowData, RefundSyncData, RefundsResponseData,
     },
 };
 use hyperswitch_domain_models::{
@@ -460,6 +460,36 @@ pub struct RazorpayPsyncResponse {
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub struct RazorpayRsyncResponse {
+    pub id: String,
+    pub status: RazorpayRsyncStatus,
+    pub receipt: Option<String>,
+    pub amount: i64,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RazorpayRsyncStatus {
+    Pending,
+    Processed,
+    Failed,
+}
+
+impl ForeignTryFrom<RazorpayRsyncStatus> for hyperswitch_common_enums::RefundStatus {
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+    fn foreign_try_from(item: RazorpayRsyncStatus) -> Result<Self, Self::Error> {
+        match item {
+            RazorpayRsyncStatus::Failed => Ok(Self::Failure),
+            RazorpayRsyncStatus::Pending => Ok(Self::Pending),
+            RazorpayRsyncStatus::Processed => Ok(Self::Success),
+        }
+    }
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct SyncCardDetails {
     pub id: String,
     pub entity: String,
@@ -547,6 +577,38 @@ fn get_psync_razorpay_payment_status(
         RazorpayStatus::Captured => AttemptStatus::Charged,
         RazorpayStatus::Refunded => AttemptStatus::AutoRefunded,
         RazorpayStatus::Failed => AttemptStatus::Failure,
+    }
+}
+
+impl
+    ForeignTryFrom<(
+        RazorpayRsyncResponse,
+        RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>,
+    )> for RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>
+{
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+
+    fn foreign_try_from(
+        (response, data): (
+            RazorpayRsyncResponse,
+            RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let status = hyperswitch_common_enums::RefundStatus::foreign_try_from(response.status)?;
+
+        let refunds_response_data = RefundsResponseData {
+            connector_refund_id: response.id,
+            refund_status: status,
+        };
+
+        Ok(Self {
+            resource_common_data: RefundFlowData {
+                status,
+                ..data.resource_common_data
+            },
+            response: Ok(refunds_response_data),
+            ..data
+        })
     }
 }
 
