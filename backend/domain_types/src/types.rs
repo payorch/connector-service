@@ -3,8 +3,8 @@ use std::{collections::HashMap, str::FromStr};
 
 use crate::connector_flow::{Authorize, PSync, RSync};
 use crate::connector_types::{
-    PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-    WebhookDetailsResponse, RefundFlowData, RefundSyncData, RefundsResponseData,
+    PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, RefundFlowData,
+    RefundSyncData, RefundsResponseData, WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
@@ -1093,7 +1093,9 @@ impl ForeignFrom<hyperswitch_common_enums::RefundStatus>
             hyperswitch_common_enums::RefundStatus::ManualReview => Self::RefundManualReview,
             hyperswitch_common_enums::RefundStatus::Pending => Self::RefundPending,
             hyperswitch_common_enums::RefundStatus::Success => Self::RefundSuccess,
-            hyperswitch_common_enums::RefundStatus::TransactionFailure => Self::RefundTransactionFailure,
+            hyperswitch_common_enums::RefundStatus::TransactionFailure => {
+                Self::RefundTransactionFailure
+            }
         }
     }
 }
@@ -1168,10 +1170,9 @@ impl ForeignTryFrom<grpc_api_types::payments::RefundsSyncRequest> for RefundSync
     fn foreign_try_from(
         value: grpc_api_types::payments::RefundsSyncRequest,
     ) -> Result<Self, error_stack::Report<Self::Error>> {
-
         Ok(RefundSyncData {
             connector_transaction_id: value.connector_transaction_id.clone(),
-            connector_refund_id: Some(value.connector_refund_id.clone()),
+            connector_refund_id: value.connector_refund_id.clone(),
             reason: value.refund_reason.clone(),
             refund_status: hyperswitch_common_enums::RefundStatus::Pending,
             refund_connector_metadata: None,

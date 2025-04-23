@@ -4,7 +4,8 @@ use domain_types::{
     connector_flow::{Authorize, CreateOrder, PSync, RSync},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
-        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundsResponseData,
+        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
+        RefundsResponseData,
     },
 };
 use domain_types::{
@@ -15,7 +16,7 @@ use external_services;
 use grpc_api_types::payments::{
     payment_service_server::PaymentService, IncomingWebhookRequest, IncomingWebhookResponse,
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncRequest, PaymentsSyncResponse,
-    RefundsSyncRequest, RefundsSyncResponse
+    RefundsSyncRequest, RefundsSyncResponse,
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
@@ -373,8 +374,11 @@ impl PaymentService for Payments {
 
         let payload = request.into_inner();
 
-        let connector = domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid connector: {}", e)))?;
+        let connector =
+            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+                .map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
+                })?;
 
         // Get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -391,29 +395,15 @@ impl PaymentService for Payments {
         // Extract auth credentials
         let auth_creds = payload.auth_creds.clone();
 
-        let refund_sync_data = match RefundSyncData::foreign_try_from(payload.clone()) {
-            Ok(data) => data,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid request data: {}",
-                    e
-                )))
-            }
-        };
+        let refund_sync_data = RefundSyncData::foreign_try_from(payload.clone())
+            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid request data: {}", e)))?;
 
         // Create common request data
-        let payment_flow_data = match RefundFlowData::foreign_try_from((
-            payload.clone(),
-            self.config.connectors.clone(),
-        )) {
-            Ok(data) => data,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid flow data: {}",
-                    e
-                )))
-            }
-        };
+        let payment_flow_data =
+            RefundFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+                .map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
+                })?;
 
         let auth_creds = match auth_creds {
             Some(auth_creds) => auth_creds,
@@ -424,15 +414,10 @@ impl PaymentService for Payments {
             }
         };
 
-        let connector_auth_details = match ConnectorAuthType::foreign_try_from(auth_creds) {
-            Ok(auth_type) => auth_type,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid auth_creds in request: {}",
-                    e
-                )))
-            }
-        };
+        let connector_auth_details =
+            ConnectorAuthType::foreign_try_from(auth_creds).map_err(|e| {
+                tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
+            })?;
 
         // Create router data
         let router_data: RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData> =
@@ -444,21 +429,13 @@ impl PaymentService for Payments {
                 response: Err(ErrorResponse::default()),
             };
 
-        let response = match external_services::service::execute_connector_processing_step(
+        let response = external_services::service::execute_connector_processing_step(
             &self.config.proxy,
             connector_integration,
             router_data,
         )
         .await
-        {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(tonic::Status::internal(format!(
-                    "Connector processing error: {}",
-                    e
-                )))
-            }
-        };
+        .map_err(|e| tonic::Status::internal(format!("Connector processing error: {}", e)))?;
 
         // Generate response
         let sync_response = generate_refund_sync_response(response)
@@ -466,7 +443,7 @@ impl PaymentService for Payments {
 
         Ok(tonic::Response::new(sync_response))
     }
-    
+
     async fn incoming_webhook(
         &self,
         request: tonic::Request<IncomingWebhookRequest>,

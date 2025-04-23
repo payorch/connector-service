@@ -32,8 +32,8 @@ use domain_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RefundFlowData, RefundSyncV2, RefundSyncData, RefundsResponseData,
-        RequestDetails, ValidationTrait, WebhookDetailsResponse,
+        RefundFlowData, RefundSyncData, RefundSyncV2, RefundsResponseData, RequestDetails,
+        ValidationTrait, WebhookDetailsResponse,
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};

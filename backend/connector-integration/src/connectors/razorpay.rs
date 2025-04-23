@@ -4,7 +4,7 @@ use domain_types::{
     connector_flow::{Authorize, PSync, RSync},
     connector_types::{
         IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData, PaymentSyncV2, PaymentsAuthorizeData,
-        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncV2, RefundSyncData,
+        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundSyncV2,
         RefundsResponseData,
     },
 };
@@ -422,4 +422,7 @@ impl
     }
 }
 
-impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData> for Razorpay {}
+impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>
+    for Razorpay
+{
+}

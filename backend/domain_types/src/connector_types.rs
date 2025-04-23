@@ -204,7 +204,7 @@ pub trait RefundSyncV2:
 #[derive(Debug, Default, Clone)]
 pub struct RefundSyncData {
     pub connector_transaction_id: String,
-    pub connector_refund_id: Option<String>,
+    pub connector_refund_id: String,
     pub reason: Option<String>,
     pub refund_connector_metadata: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
     pub refund_status: hyperswitch_common_enums::RefundStatus,
