@@ -450,7 +450,7 @@ impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsRespon
         req: &RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
         let refund_id = req.request.connector_refund_id.clone();
-        Ok(format!("https://api.razorpay.com/v1/refunds/{}", refund_id))
+        Ok(format!("{}v1/refunds/{}", req.resource_common_data.connectors.razorpay.base_url, refund_id))
     }
 
     fn handle_response_v2(
@@ -479,12 +479,6 @@ impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsRespon
         event_builder: Option<&mut ConnectorEvent>,
     ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
         self.build_error_response(res, event_builder)
-    }
-
-    fn get_multiple_capture_sync_method(
-        &self,
-    ) -> CustomResult<CaptureSyncMethod, errors::ConnectorError> {
-        Ok(CaptureSyncMethod::Individual)
     }
 
     fn get_5xx_error_response(
