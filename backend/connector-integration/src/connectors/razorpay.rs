@@ -1,12 +1,13 @@
 pub mod transformers;
 
 use domain_types::{
-    connector_flow::{Authorize, PSync, RSync},
+    connector_flow::{Authorize, CreateOrder, PSync, RSync, Refund},
     connector_types::{
         ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
         RefundFlowData, RefundSyncData, RefundSyncV2, RefundsResponseData,
-        RequestDetails, WebhookDetailsResponse,
+        RequestDetails, WebhookDetailsResponse, ConnectorServiceTrait, PaymentCreateOrderData,
+        PaymentCreateOrderResponse, PaymentOrderCreate, ValidationTrait, RefundV2, RefundsData,
     },
 };
 use hyperswitch_common_utils::{
@@ -38,14 +39,6 @@ use hyperswitch_masking::{Mask, Maskable, PeekInterface};
 
 use transformers::{self as razorpay, ForeignTryFrom, PaymentEntity};
 
-use domain_types::{
-    connector_flow::CreateOrder,
-    connector_types::{
-        ConnectorServiceTrait, PaymentCreateOrderData, PaymentCreateOrderResponse,
-        PaymentOrderCreate, ValidationTrait,
-    },
-};
-
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
     pub(crate) const AUTHORIZATION: &str = "Authorization";
@@ -68,6 +61,7 @@ impl PaymentAuthorizeV2 for Razorpay {}
 impl PaymentSyncV2 for Razorpay {}
 impl PaymentOrderCreate for Razorpay {}
 impl RefundSyncV2 for Razorpay {}
+impl RefundV2 for Razorpay {}
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
@@ -521,3 +515,4 @@ impl IncomingWebhook for Razorpay {
         })
     }
 }
+impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponseData> for Razorpay {}

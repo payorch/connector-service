@@ -1,4 +1,4 @@
-use crate::connector_flow::{self, Authorize, PSync, RSync};
+use crate::connector_flow::{self, Authorize, PSync, RSync, Refund};
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::Connectors;
 use crate::utils::ForeignTryFrom;
@@ -44,6 +44,7 @@ pub trait ConnectorServiceTrait:
     + PaymentOrderCreate
     + RefundSyncV2
     + IncomingWebhook
+    + RefundV2
 {
 }
 
@@ -72,6 +73,11 @@ pub trait PaymentAuthorizeV2:
 
 pub trait PaymentSyncV2:
     ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>
+{
+}
+
+pub trait RefundV2:
+    ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>
 {
 }
 
@@ -219,12 +225,7 @@ pub struct RefundsResponseData {
 #[derive(Debug, Clone)]
 pub struct RefundFlowData {
     pub status: hyperswitch_common_enums::RefundStatus,
-    pub payment_method: hyperswitch_common_enums::PaymentMethod,
-    pub connector_meta_data: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
-    pub amount_captured: Option<i64>,
-    pub minor_amount_captured: Option<MinorUnit>,
-    pub connector_request_reference_id: String,
-    pub refund_id: String,
+    pub refund_id: Option<String>,
     pub connectors: Connectors,
 }
 
@@ -353,4 +354,22 @@ pub trait IncomingWebhook {
     ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
         Err(ConnectorError::NotImplemented("process_payment_webhook".to_string()).into())
     }
+}
+#[derive(Debug, Default, Clone)]
+pub struct RefundsData {
+    pub refund_id: String,
+    pub connector_transaction_id: String,
+    pub connector_refund_id: Option<String>,
+    pub currency: hyperswitch_common_enums::Currency,
+    pub payment_amount: i64,
+    pub reason: Option<String>,
+    pub webhook_url: Option<String>,
+    pub refund_amount: i64,
+    pub connector_metadata: Option<serde_json::Value>,
+    pub refund_connector_metadata: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
+    pub minor_payment_amount: MinorUnit,
+    pub minor_refund_amount: MinorUnit,
+    pub refund_status: hyperswitch_common_enums::RefundStatus,
+    pub merchant_account_id: Option<String>,
+    pub capture_method: Option<hyperswitch_common_enums::CaptureMethod>,
 }

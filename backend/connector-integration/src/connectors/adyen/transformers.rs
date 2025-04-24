@@ -1,6 +1,9 @@
 use domain_types::{
-    connector_flow::Authorize,
-    connector_types::{PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData},
+    connector_flow::{Authorize, Refund},
+    connector_types::{
+        PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData,
+        RefundFlowData, RefundsData, RefundsResponseData
+    },
 };
 use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus};
@@ -1415,4 +1418,78 @@ pub struct AdyenRefusal {
     #[serde(rename = "type")]
     pub type_of_redirection_result: Option<String>,
     pub result_code: Option<String>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenRefundRequest {
+    merchant_account: Secret<String>,
+    amount: Amount,
+    merchant_refund_reason: Option<String>,
+    reference: String,
+    splits: Option<Vec<AdyenSplitData>>,
+    store: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenRefundResponse {
+    merchant_account: Secret<String>,
+    psp_reference: String,
+    payment_psp_reference: String,
+    reference: String,
+    status: String,
+}
+
+impl TryFrom<&AdyenRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>> for AdyenRefundRequest {
+    type Error = Error;
+    fn try_from(item: &AdyenRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>) -> Result<Self, Self::Error> {
+        let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
+
+        Ok(Self {
+            merchant_account: auth_type.merchant_account,
+            amount: Amount {
+                currency: item.router_data.request.currency,
+                value: item.amount,
+            },
+            merchant_refund_reason: item.router_data.request.reason.clone(),
+            reference: item.router_data.request.refund_id.clone(),
+            store: None,
+            splits: None,
+        })
+    }
+}
+
+impl<F, Req>
+    ForeignTryFrom<(
+        AdyenRefundResponse,
+        RouterDataV2<F, RefundFlowData, Req, RefundsResponseData>,
+        u16,
+    )> for RouterDataV2<F, RefundFlowData, Req, RefundsResponseData>
+{
+    type Error = Error;
+    fn foreign_try_from(
+        (response, data, _http_code): (
+            AdyenRefundResponse,
+            RouterDataV2<F, RefundFlowData, Req, RefundsResponseData>,
+            u16,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let status = hyperswitch_common_enums::enums::RefundStatus::Pending;
+        
+        let refunds_response_data = RefundsResponseData {
+            connector_refund_id: response.psp_reference,
+            refund_status: status,
+        };
+
+        Ok(Self {
+            resource_common_data: RefundFlowData {
+                status,
+                ..data.resource_common_data
+            },
+            response: Ok(refunds_response_data),
+            ..data
+        })
+    }
 }

@@ -1,16 +1,16 @@
 use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
-use crate::connector_flow::{Authorize, PSync, RSync};
+use crate::connector_flow::{Authorize, PSync, RSync, Refund};
 use crate::connector_types::{
     PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, RefundFlowData,
-    RefundSyncData, RefundsResponseData, WebhookDetailsResponse,
+    RefundSyncData, RefundsData, RefundsResponseData, WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
-    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse, RefundsSyncResponse,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse, RefundsSyncResponse, RefundsResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
@@ -1184,16 +1184,25 @@ impl ForeignTryFrom<(grpc_api_types::payments::RefundsSyncRequest, Connectors)> 
     type Error = ApplicationErrorResponse;
 
     fn foreign_try_from(
-        (value, connectors): (grpc_api_types::payments::RefundsSyncRequest, Connectors),
+        (_value, connectors): (grpc_api_types::payments::RefundsSyncRequest, Connectors),
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         Ok(RefundFlowData {
             status: hyperswitch_common_enums::RefundStatus::Pending,
-            payment_method: hyperswitch_common_enums::PaymentMethod::Card, // Default,
-            connector_meta_data: None,
-            amount_captured: None,
-            minor_amount_captured: None,
-            connector_request_reference_id: value.connector_transaction_id,
-            refund_id: value.connector_refund_id,
+            refund_id: None,
+            connectors,
+        })
+    }
+}
+
+impl ForeignTryFrom<(grpc_api_types::payments::RefundsRequest, Connectors)> for RefundFlowData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        (value, connectors): (grpc_api_types::payments::RefundsRequest, Connectors),
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(RefundFlowData {
+            status: hyperswitch_common_enums::RefundStatus::Pending,
+            refund_id: Some(value.refund_id),
             connectors,
         })
     }
@@ -1254,5 +1263,69 @@ impl ForeignTryFrom<WebhookDetailsResponse> for PaymentsSyncResponse {
             error_code: value.error_code,
             error_message: value.error_message,
         })
+    }
+}
+
+impl ForeignTryFrom<grpc_api_types::payments::RefundsRequest> for RefundsData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::RefundsRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+
+        let minor_refund_amount = hyperswitch_common_utils::types::MinorUnit::new(value.minor_refund_amount);
+
+        let minor_payment_amount = hyperswitch_common_utils::types::MinorUnit::new(value.minor_payment_amount);
+
+        Ok(RefundsData {
+            refund_id: value.refund_id.to_string(),
+            connector_transaction_id: value.connector_transaction_id.clone(),
+            connector_refund_id: value.connector_refund_id.clone(),
+            currency: hyperswitch_common_enums::Currency::foreign_try_from(value.currency())?,
+            payment_amount: value.payment_amount.clone(),
+            reason: value.reason.clone(),
+            webhook_url: None,
+            refund_amount: value.refund_amount.clone(),
+            connector_metadata: None,
+            refund_connector_metadata: None,
+            minor_payment_amount: minor_payment_amount,
+            minor_refund_amount: minor_refund_amount,
+            refund_status: hyperswitch_common_enums::RefundStatus::Pending,
+            merchant_account_id: None,
+            capture_method: None,
+        })
+    }
+}
+
+pub fn generate_refund_response(
+    router_data_v2: RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+) -> Result<RefundsResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let refund_response = router_data_v2.response;
+
+    match refund_response {
+        Ok(response) => {
+            let status = response.refund_status;
+            let grpc_status = grpc_api_types::payments::RefundStatus::foreign_from(status);
+
+            Ok(RefundsResponse {
+                connector_refund_id: Some(response.connector_refund_id),
+                refund_status: grpc_status as i32,
+                error_message: None,
+                error_code: None,
+            })
+        }
+        Err(e) => {
+            let status = e
+                .attempt_status
+                .map(grpc_api_types::payments::AttemptStatus::foreign_from)
+                .unwrap_or_default();
+
+            Ok(RefundsResponse {
+                connector_refund_id: None,
+                refund_status: status as i32,
+                error_message: Some(e.message),
+                error_code: Some(e.code),
+            })
+        }
     }
 }

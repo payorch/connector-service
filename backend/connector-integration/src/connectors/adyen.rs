@@ -27,13 +27,13 @@ use hyperswitch_interfaces::{
 use hyperswitch_masking::{Mask, Maskable};
 
 use domain_types::{
-    connector_flow::{Authorize, PSync, RSync},
+    connector_flow::{Authorize, PSync, RSync, Refund},
     connector_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RefundFlowData, RefundSyncData, RefundSyncV2, RefundsResponseData, RequestDetails,
-        ValidationTrait, WebhookDetailsResponse,
+        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData,
+        RefundsResponseData, RequestDetails, ValidationTrait, WebhookDetailsResponse,
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
@@ -49,6 +49,7 @@ impl ConnectorServiceTrait for Adyen {}
 impl PaymentAuthorizeV2 for Adyen {}
 impl PaymentSyncV2 for Adyen {}
 impl RefundSyncV2 for Adyen {}
+impl RefundV2 for Adyen {}
 
 #[derive(Clone)]
 pub struct Adyen {
@@ -384,5 +385,89 @@ impl IncomingWebhook for Adyen {
             error_code: notif.reason.clone(),
             error_message: notif.reason,
         })
+    }
+}
+
+impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponseData> for Adyen {
+    fn get_headers(
+        &self,
+        req: &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+    ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
+    where
+        Self: ConnectorIntegrationV2<
+            Authorize,
+            PaymentFlowData,
+            PaymentsAuthorizeData,
+            PaymentsResponseData,
+        >,
+    {
+        let mut header = vec![(
+            headers::CONTENT_TYPE.to_string(),
+            "application/json".to_string().into(),
+        )];
+        let mut api_key = self.get_auth_header(&req.connector_auth_type)?;
+        header.append(&mut api_key);
+        Ok(header)
+    }
+
+    fn get_url(
+        &self,
+        req: &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+    ) -> CustomResult<String, errors::ConnectorError> {
+        let connector_payment_id = req.request.connector_transaction_id.clone();
+        Ok(format!(
+            "{}{}/payments/{}/refunds",
+            req.resource_common_data.connectors.adyen.base_url, ADYEN_API_VERSION, connector_payment_id
+        ))
+    }
+
+    fn get_request_body(
+        &self,
+        req: &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+    ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
+        let refund_router_data =
+            adyen::AdyenRouterData::try_from((req.request.minor_refund_amount, req))?;
+        let connector_req = adyen::AdyenRefundRequest::try_from(&refund_router_data)?;
+
+        Ok(Some(RequestContent::Json(Box::new(connector_req))))
+    }
+
+    fn handle_response_v2(
+        &self,
+        data: &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+        event_builder: Option<&mut ConnectorEvent>,
+        res: Response,
+    ) -> CustomResult<
+        RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+        errors::ConnectorError,
+    > {
+        let response: adyen::AdyenRefundResponse = res
+            .response
+            .parse_struct("AdyenRefundResponse")
+            .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        event_builder.map(|i| i.set_response_body(&response));
+        
+        RouterDataV2::foreign_try_from((
+            response,
+            data.clone(),
+            res.status_code,
+        ))
+        .change_context(errors::ConnectorError::ResponseHandlingFailed)
+    }
+
+    fn get_error_response_v2(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
     }
 }
