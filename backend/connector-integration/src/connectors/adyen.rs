@@ -395,10 +395,10 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
     ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
     where
         Self: ConnectorIntegrationV2<
-            Authorize,
-            PaymentFlowData,
-            PaymentsAuthorizeData,
-            PaymentsResponseData,
+            Refund,
+            RefundFlowData,
+            RefundsData,
+            RefundsResponseData,
         >,
     {
         let mut header = vec![(
