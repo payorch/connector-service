@@ -3,7 +3,7 @@ pub mod transformers;
 use domain_types::{
     connector_flow::{Authorize, CreateOrder, PSync, RSync, Refund},
     connector_types::{
-        ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
+        ConnectorServiceTrait, ConnectorWebhookSecrets, EventType, IncomingWebhook, PaymentAuthorizeV2,
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
         RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData, RefundsResponseData,
@@ -37,7 +37,7 @@ use hyperswitch_interfaces::{
 };
 use hyperswitch_masking::{Mask, Maskable, PeekInterface};
 
-use transformers::{self as razorpay, ForeignTryFrom, PaymentEntity};
+use transformers::{self as razorpay, ForeignTryFrom};
 
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
@@ -490,12 +490,23 @@ impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsRespon
 impl IncomingWebhook for Razorpay {
     fn get_event_type(
         &self,
-        _request: RequestDetails,
+        request: RequestDetails,
         _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
         _connector_account_details: Option<ConnectorAuthType>,
-    ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>>
+    ) -> Result<EventType, error_stack::Report<errors::ConnectorError>>
     {
-        Ok(domain_types::connector_types::EventType::Payment)
+        let payload= transformers::get_webhook_object_from_body(request.body)
+            .map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
+
+        if payload.refund.is_some() {
+            Ok(EventType::Refund)
+        }
+        else {
+            Ok(EventType::Payment)
+        }
     }
 
     fn process_payment_webhook(
@@ -504,17 +515,47 @@ impl IncomingWebhook for Razorpay {
         _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
-        let notif: PaymentEntity = transformers::get_webhook_object_from_body(request.body)
+        let payload= transformers::get_webhook_object_from_body(request.body)
             .map_err(|err| {
                 report!(errors::ConnectorError::WebhookBodyDecodingFailed)
                     .attach_printable(format!("error while decoing webhook body {err}"))
             })?;
+
+        let notif = payload.payment.ok_or_else(|| {
+            error_stack::Report::new(errors::ConnectorError::RequestEncodingFailed)
+        })?;
+
         Ok(WebhookDetailsResponse {
-            resource_id: Some(ResponseId::ConnectorTransactionId(notif.order_id)),
-            status: transformers::get_razorpay_webhook_status(notif.entity, notif.status),
+            resource_id: Some(ResponseId::ConnectorTransactionId(notif.entity.order_id)),
+            status: transformers::get_razorpay_payment_webhook_status(notif.entity.entity, notif.entity.status)?,
             connector_response_reference_id: None,
-            error_code: notif.error_code,
-            error_message: notif.error_reason,
+            error_code: notif.entity.error_code,
+            error_message: notif.entity.error_reason,
+        })
+    }
+
+    fn process_refund_webhook(
+            &self,
+            request: RequestDetails,
+            _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+            _connector_account_details: Option<ConnectorAuthType>,
+        ) -> Result<domain_types::connector_types::RefundWebhookDetailsResponse, error_stack::Report<errors::ConnectorError>> {
+        let payload= transformers::get_webhook_object_from_body(request.body)
+            .map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
+
+        let notif = payload.refund.ok_or_else(|| {
+            error_stack::Report::new(errors::ConnectorError::RequestEncodingFailed)
+        })?;
+
+        Ok(domain_types::connector_types::RefundWebhookDetailsResponse {
+            connector_refund_id: Some(notif.entity.id),
+            status: transformers::get_razorpay_refund_webhook_status(notif.entity.entity, notif.entity.status)?,
+            connector_response_reference_id: None,
+            error_code: None,
+            error_message: None,
         })
     }
 }

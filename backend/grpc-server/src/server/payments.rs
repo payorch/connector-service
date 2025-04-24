@@ -536,6 +536,15 @@ impl PaymentService for Payments {
                 )
                 .await?
             }
+            domain_types::connector_types::EventType::Refund => {
+                get_refunds_webhook_content(
+                    connector_data,
+                    request_details,
+                    webhook_secrets,
+                    connector_auth_details,
+                )
+                .await?
+            }
         };
 
         let api_event_type = grpc_api_types::payments::EventType::foreign_try_from(event_type)
@@ -658,6 +667,34 @@ async fn get_payments_webhook_content(
     Ok(grpc_api_types::payments::WebhookResponseContent {
         content: Some(
             grpc_api_types::payments::webhook_response_content::Content::PaymentsResponse(response),
+        ),
+    })
+}
+
+async fn get_refunds_webhook_content(
+    connector_data: ConnectorData,
+    request_details: domain_types::connector_types::RequestDetails,
+    webhook_secrets: Option<domain_types::connector_types::ConnectorWebhookSecrets>,
+    connector_auth_details: Option<ConnectorAuthType>,
+) -> Result<grpc_api_types::payments::WebhookResponseContent, tonic::Status> {
+    let webhook_details = connector_data
+        .connector
+        .process_refund_webhook(request_details, webhook_secrets, connector_auth_details)
+        .map_err(|e| {
+            tonic::Status::internal(format!(
+                "Connector processing error in process_refund_webhook: {}",
+                e
+            ))
+        })?;
+
+    // Generate response
+    let response = RefundsSyncResponse::foreign_try_from(webhook_details).map_err(|e| {
+        tonic::Status::internal(format!("Error while constructing response: {}", e))
+    })?;
+
+    Ok(grpc_api_types::payments::WebhookResponseContent {
+        content: Some(
+            grpc_api_types::payments::webhook_response_content::Content::RefundsResponse(response),
         ),
     })
 }

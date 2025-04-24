@@ -4,6 +4,7 @@ use error_stack::ResultExt;
 use hyperswitch_api_models::enums::{self, AttemptStatus, CardNetwork};
 
 use hyperswitch_cards::CardNumber;
+use hyperswitch_common_enums::RefundStatus;
 use hyperswitch_common_utils::{
     ext_traits::ByteSliceExt, pii::Email, request::Method, types::MinorUnit,
 };
@@ -481,20 +482,13 @@ pub struct RazorpayRefundRequest {
     pub amount: MinorUnit,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RazorpayRefundStatus {
-    Pending,
-    Processed,
-    Failed,
-}
-
 impl ForeignTryFrom<RazorpayRefundStatus> for hyperswitch_common_enums::RefundStatus {
     type Error = hyperswitch_interfaces::errors::ConnectorError;
     fn foreign_try_from(item: RazorpayRefundStatus) -> Result<Self, Self::Error> {
         match item {
             RazorpayRefundStatus::Failed => Ok(Self::Failure),
-            RazorpayRefundStatus::Pending => Ok(Self::Pending),
+            RazorpayRefundStatus::Pending |
+            RazorpayRefundStatus::Created => Ok(Self::Pending),
             RazorpayRefundStatus::Processed => Ok(Self::Success),
         }
     }
@@ -891,7 +885,6 @@ impl
 pub struct RazorpayWebhook {
     pub account_id: String,
     pub contains: Vec<String>,
-    pub created_at: i64,
     pub entity: String,
     pub event: String,
     pub payload: Payload,
@@ -900,13 +893,20 @@ pub struct RazorpayWebhook {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Payload {
-    pub payment: PaymentWrapper,
+    pub payment: Option<PaymentWrapper>,
+    pub refund: Option<RefundWrapper>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct PaymentWrapper {
     pub entity: PaymentEntity,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RefundWrapper {
+    pub entity: RefundEntity,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -934,7 +934,6 @@ pub struct PaymentEntity {
     pub notes: Vec<String>,
     pub fee: Option<i64>,
     pub tax: Option<i64>,
-    pub created_at: i64,
     pub error_code: Option<String>,
     pub error_description: Option<String>,
     pub error_reason: Option<String>,
@@ -945,10 +944,22 @@ pub struct PaymentEntity {
     pub token_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RefundEntity {
+    pub id: String,
+    pub entity: RazorpayEntity,
+    pub amount: i64,
+    pub currency: String,
+    pub payment_id: String,
+    pub status: RazorpayRefundStatus,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RazorpayEntity {
     Payment,
+    Refund,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -957,6 +968,15 @@ pub enum RazorpayPaymentStatus {
     Authorized,
     Captured,
     Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RazorpayRefundStatus {
+    Created,
+    Processed,
+    Failed,
+    Pending,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -978,23 +998,38 @@ pub struct RazorpayWebhookCard {
 
 pub fn get_webhook_object_from_body(
     body: Vec<u8>,
-) -> Result<PaymentEntity, error_stack::Report<errors::ConnectorError>> {
+) -> Result<Payload, error_stack::Report<errors::ConnectorError>> {
     let webhook: RazorpayWebhook = body
         .parse_struct("RazorpayWebhook")
         .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
-
-    Ok(webhook.payload.payment.entity)
+    Ok(webhook.payload)
 }
 
-pub(crate) fn get_razorpay_webhook_status(
+pub(crate) fn get_razorpay_payment_webhook_status(
     entity: RazorpayEntity,
     status: RazorpayPaymentStatus,
-) -> AttemptStatus {
+) -> Result<AttemptStatus, errors::ConnectorError> {
     match entity {
         RazorpayEntity::Payment => match status {
-            RazorpayPaymentStatus::Authorized => AttemptStatus::Authorized,
-            RazorpayPaymentStatus::Captured => AttemptStatus::Charged,
-            RazorpayPaymentStatus::Failed => AttemptStatus::AuthorizationFailed,
+            RazorpayPaymentStatus::Authorized => Ok(AttemptStatus::Authorized),
+            RazorpayPaymentStatus::Captured => Ok(AttemptStatus::Charged),
+            RazorpayPaymentStatus::Failed => Ok(AttemptStatus::AuthorizationFailed),
         },
+        RazorpayEntity::Refund => Err(errors::ConnectorError::RequestEncodingFailed)
+    }
+}
+
+pub(crate) fn get_razorpay_refund_webhook_status(
+    entity: RazorpayEntity,
+    status: RazorpayRefundStatus,
+) -> Result<RefundStatus, errors::ConnectorError> {
+    match entity {
+        RazorpayEntity::Refund => match status {
+            RazorpayRefundStatus::Processed => Ok(RefundStatus::Success),
+            RazorpayRefundStatus::Created |
+            RazorpayRefundStatus::Pending => Ok(RefundStatus::Pending),
+            RazorpayRefundStatus::Failed => Ok(RefundStatus::Failure),
+        },
+        RazorpayEntity::Payment => Err(errors::ConnectorError::RequestEncodingFailed)
     }
 }

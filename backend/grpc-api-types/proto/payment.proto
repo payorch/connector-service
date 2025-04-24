@@ -108,11 +108,13 @@ message IncomingWebhookResponse {
 
 enum EventType {
   PAYMENT = 0;
+  REFUND = 1;
 }
 
 message WebhookResponseContent {
   oneof content {
     PaymentsSyncResponse payments_response = 1;
+    RefundsSyncResponse refunds_response = 2;
   }
 }
 

@@ -238,6 +238,15 @@ pub struct WebhookDetailsResponse {
     pub error_message: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct RefundWebhookDetailsResponse {
+    pub connector_refund_id: Option<String>,
+    pub status: hyperswitch_common_enums::RefundStatus,
+    pub connector_response_reference_id: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HttpMethod {
     Options,
@@ -269,6 +278,7 @@ pub struct ConnectorWebhookSecrets {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EventType {
     Payment,
+    Refund,
 }
 
 impl ForeignTryFrom<grpc_api_types::payments::EventType> for EventType {
@@ -279,6 +289,7 @@ impl ForeignTryFrom<grpc_api_types::payments::EventType> for EventType {
     ) -> Result<Self, error_stack::Report<Self::Error>> {
         match value {
             grpc_api_types::payments::EventType::Payment => Ok(Self::Payment),
+            grpc_api_types::payments::EventType::Refund => Ok(Self::Refund),
         }
     }
 }
@@ -289,6 +300,7 @@ impl ForeignTryFrom<EventType> for grpc_api_types::payments::EventType {
     fn foreign_try_from(value: EventType) -> Result<Self, error_stack::Report<Self::Error>> {
         match value {
             EventType::Payment => Ok(Self::Payment),
+            EventType::Refund => Ok(Self::Refund),
         }
     }
 }
@@ -363,6 +375,15 @@ pub trait IncomingWebhook {
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<WebhookDetailsResponse, error_stack::Report<ConnectorError>> {
         Err(ConnectorError::NotImplemented("process_payment_webhook".to_string()).into())
+    }
+
+    fn process_refund_webhook(
+        &self,
+        _request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<RefundWebhookDetailsResponse, error_stack::Report<ConnectorError>> {
+        Err(ConnectorError::NotImplemented("process_refund_webhook".to_string()).into())
     }
 }
 #[derive(Debug, Default, Clone)]

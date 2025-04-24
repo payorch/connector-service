@@ -32,8 +32,8 @@ use domain_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData, RefundsResponseData,
-        RequestDetails, ValidationTrait, WebhookDetailsResponse,
+        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData, RefundWebhookDetailsResponse,
+        RefundsResponseData, RequestDetails, ValidationTrait, WebhookDetailsResponse,
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
@@ -357,12 +357,17 @@ impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsRespon
 impl IncomingWebhook for Adyen {
     fn get_event_type(
         &self,
-        _request: RequestDetails,
+        request: RequestDetails,
         _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
         _connector_account_details: Option<ConnectorAuthType>,
     ) -> Result<domain_types::connector_types::EventType, error_stack::Report<errors::ConnectorError>>
     {
-        Ok(domain_types::connector_types::EventType::Payment)
+        let notif: AdyenNotificationRequestItemWH =
+            transformers::get_webhook_object_from_body(request.body).map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
+        Ok(transformers::get_adyen_webhook_event_type(notif.event_code))
     }
 
     fn process_payment_webhook(
@@ -380,8 +385,32 @@ impl IncomingWebhook for Adyen {
             resource_id: Some(ResponseId::ConnectorTransactionId(
                 notif.psp_reference.clone(),
             )),
-            status: transformers::get_adyen_webhook_event(notif.event_code, notif.success),
+            status: transformers::get_adyen_payment_webhook_event(notif.event_code, notif.success)?,
             connector_response_reference_id: Some(notif.psp_reference),
+            error_code: notif.reason.clone(),
+            error_message: notif.reason,
+        })
+    }
+
+    fn process_refund_webhook(
+        &self,
+        request: RequestDetails,
+        _connector_webhook_secret: Option<ConnectorWebhookSecrets>,
+        _connector_account_details: Option<ConnectorAuthType>,
+    ) -> Result<
+        domain_types::connector_types::RefundWebhookDetailsResponse,
+        error_stack::Report<errors::ConnectorError>,
+    > {
+        let notif: AdyenNotificationRequestItemWH =
+            transformers::get_webhook_object_from_body(request.body).map_err(|err| {
+                report!(errors::ConnectorError::WebhookBodyDecodingFailed)
+                    .attach_printable(format!("error while decoing webhook body {err}"))
+            })?;
+
+        Ok(RefundWebhookDetailsResponse {
+            connector_refund_id: Some(notif.psp_reference.clone()),
+            status: transformers::get_adyen_refund_webhook_event(notif.event_code, notif.success)?,
+            connector_response_reference_id: Some(notif.psp_reference.clone()),
             error_code: notif.reason.clone(),
             error_message: notif.reason,
         })

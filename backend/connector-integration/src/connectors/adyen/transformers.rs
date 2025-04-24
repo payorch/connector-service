@@ -1,12 +1,12 @@
 use domain_types::{
     connector_flow::{Authorize, Refund},
     connector_types::{
-        PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, RefundFlowData, RefundsData,
+        EventType, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, RefundFlowData, RefundsData,
         RefundsResponseData,
     },
 };
 use error_stack::ResultExt;
-use hyperswitch_api_models::enums::{self, AttemptStatus};
+use hyperswitch_api_models::enums::{self, AttemptStatus, RefundStatus};
 
 use hyperswitch_common_utils::{
     errors::CustomResult, ext_traits::ByteSliceExt, request::Method, types::MinorUnit,
@@ -1082,6 +1082,10 @@ pub enum WebhookEventCode {
     Cancellation,
     Capture,
     CaptureFailed,
+    Refund,
+    RefundFailed,
+    RefundReversed,
+    CancelOrRefund,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1100,30 +1104,66 @@ fn is_success_scenario(is_success: &str) -> bool {
     is_success == "true"
 }
 
-pub(crate) fn get_adyen_webhook_event(code: WebhookEventCode, is_success: String) -> AttemptStatus {
+pub(crate) fn get_adyen_payment_webhook_event(
+    code: WebhookEventCode,
+    is_success: String,
+) -> Result<AttemptStatus, errors::ConnectorError> {
     match code {
         WebhookEventCode::Authorisation => {
             if is_success_scenario(&is_success) {
-                AttemptStatus::Authorized
+                Ok(AttemptStatus::Authorized)
             } else {
-                AttemptStatus::Failure
+                Ok(AttemptStatus::Failure)
             }
         }
         WebhookEventCode::Cancellation => {
             if is_success_scenario(&is_success) {
-                AttemptStatus::Voided
+                Ok(AttemptStatus::Voided)
             } else {
-                AttemptStatus::Authorized
+                Ok(AttemptStatus::Authorized)
             }
         }
         WebhookEventCode::Capture => {
             if is_success_scenario(&is_success) {
-                AttemptStatus::Charged
+                Ok(AttemptStatus::Charged)
             } else {
-                AttemptStatus::Failure
+                Ok(AttemptStatus::Failure)
             }
         }
-        WebhookEventCode::CaptureFailed => AttemptStatus::Failure,
+        WebhookEventCode::CaptureFailed => Ok(AttemptStatus::Failure),
+        _ => Err(errors::ConnectorError::RequestEncodingFailed),
+    }
+}
+
+pub(crate) fn get_adyen_refund_webhook_event(
+    code: WebhookEventCode,
+    is_success: String,
+) -> Result<RefundStatus, errors::ConnectorError> {
+    match code {
+        WebhookEventCode::Refund | WebhookEventCode::CancelOrRefund => {
+            if is_success_scenario(&is_success) {
+                Ok(RefundStatus::Success)
+            } else {
+                Ok(RefundStatus::Failure)
+            }
+        }
+        WebhookEventCode::RefundFailed | WebhookEventCode::RefundReversed => {
+            Ok(RefundStatus::Failure)
+        }
+        _ => Err(errors::ConnectorError::RequestEncodingFailed),
+    }
+}
+
+pub(crate) fn get_adyen_webhook_event_type(code: WebhookEventCode) -> EventType {
+    match code {
+        WebhookEventCode::Authorisation
+        | WebhookEventCode::Cancellation
+        | WebhookEventCode::Capture
+        | WebhookEventCode::CaptureFailed => EventType::Payment,
+        WebhookEventCode::Refund
+        | WebhookEventCode::RefundFailed
+        | WebhookEventCode::RefundReversed
+        | WebhookEventCode::CancelOrRefund => EventType::Refund,
     }
 }
 
