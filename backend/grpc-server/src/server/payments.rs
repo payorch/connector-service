@@ -4,19 +4,21 @@ use domain_types::{
     connector_flow::{Authorize, CreateOrder, PSync, RSync, Refund},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
-        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
-        RefundsData, RefundsResponseData,
+        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundsData,
+        RefundsResponseData,
     },
 };
 use domain_types::{
-    types::{generate_payment_sync_response, generate_refund_sync_response, generate_refund_response},
+    types::{
+        generate_payment_sync_response, generate_refund_response, generate_refund_sync_response,
+    },
     utils::ForeignTryFrom,
 };
 use external_services;
 use grpc_api_types::payments::{
     payment_service_server::PaymentService, IncomingWebhookRequest, IncomingWebhookResponse,
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncRequest, PaymentsSyncResponse,
-    RefundsSyncRequest, RefundsSyncResponse, RefundsRequest, RefundsResponse,
+    RefundsRequest, RefundsResponse, RefundsSyncRequest, RefundsSyncResponse,
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
@@ -452,7 +454,7 @@ impl PaymentService for Payments {
 
         let request_details = payload
             .request_details
-            .map(|details| domain_types::connector_types::RequestDetails::foreign_try_from(details))
+            .map(domain_types::connector_types::RequestDetails::foreign_try_from)
             .ok_or_else(|| {
                 tonic::Status::invalid_argument("missing request_details in the payload")
             })?
@@ -536,8 +538,13 @@ impl PaymentService for Payments {
             }
         };
 
+        let api_event_type = grpc_api_types::payments::EventType::foreign_try_from(event_type)
+            .map_err(|e| {
+                tonic::Status::internal(format!("Invalid event_type in the payload: {}", e))
+            })?;
+
         let response = IncomingWebhookResponse {
-            event_type: event_type as i32,
+            event_type: api_event_type.into(),
             content: Some(content),
             source_verified,
         };
@@ -575,24 +582,21 @@ impl PaymentService for Payments {
         let auth_creds = payload.auth_creds.clone();
 
         let refund_data = RefundsData::foreign_try_from(payload.clone())
-            .map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid request data: {}", e))
-            })?;
-        
+            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid request data: {}", e)))?;
 
         // Create common request data
-        let refund_flow_data = RefundFlowData::foreign_try_from((
-                payload.clone(),
-                self.config.connectors.clone(),
-            )).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
-            })?;
+        let refund_flow_data =
+            RefundFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+                .map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
+                })?;
 
-        let auth_creds = auth_creds
-            .ok_or(tonic::Status::invalid_argument("Missing auth_creds in request".to_string()))?;
+        let auth_creds = auth_creds.ok_or(tonic::Status::invalid_argument(
+            "Missing auth_creds in request".to_string(),
+        ))?;
 
-        let connector_auth_details = ConnectorAuthType::foreign_try_from(auth_creds)
-            .map_err(|e| {
+        let connector_auth_details =
+            ConnectorAuthType::foreign_try_from(auth_creds).map_err(|e| {
                 tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
             })?;
 
@@ -612,15 +616,11 @@ impl PaymentService for Payments {
             router_data,
         )
         .await
-        .map_err(|e| {
-            tonic::Status::internal(format!("Connector processing error: {}", e))
-        })?;
+        .map_err(|e| tonic::Status::internal(format!("Connector processing error: {}", e)))?;
 
         // Generate response
         let refund_response = generate_refund_response(response)
-            .map_err(|e| {
-                tonic::Status::internal(format!("Response generation error: {}", e))
-            })?;
+            .map_err(|e| tonic::Status::internal(format!("Response generation error: {}", e)))?;
 
         Ok(tonic::Response::new(refund_response))
     }

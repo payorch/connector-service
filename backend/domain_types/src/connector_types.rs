@@ -283,6 +283,16 @@ impl ForeignTryFrom<grpc_api_types::payments::EventType> for EventType {
     }
 }
 
+impl ForeignTryFrom<EventType> for grpc_api_types::payments::EventType {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(value: EventType) -> Result<Self, error_stack::Report<Self::Error>> {
+        match value {
+            EventType::Payment => Ok(Self::Payment),
+        }
+    }
+}
+
 impl ForeignTryFrom<grpc_api_types::payments::Method> for HttpMethod {
     type Error = ApplicationErrorResponse;
 

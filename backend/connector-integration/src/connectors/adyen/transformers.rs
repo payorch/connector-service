@@ -1,8 +1,8 @@
 use domain_types::{
     connector_flow::{Authorize, Refund},
     connector_types::{
-        PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData,
-        RefundFlowData, RefundsData, RefundsResponseData
+        PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, RefundFlowData, RefundsData,
+        RefundsResponseData,
     },
 };
 use error_stack::ResultExt;
@@ -1442,9 +1442,17 @@ pub struct AdyenRefundResponse {
     status: String,
 }
 
-impl TryFrom<&AdyenRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>> for AdyenRefundRequest {
+impl
+    TryFrom<
+        &AdyenRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>,
+    > for AdyenRefundRequest
+{
     type Error = Error;
-    fn try_from(item: &AdyenRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>) -> Result<Self, Self::Error> {
+    fn try_from(
+        item: &AdyenRouterData<
+            &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+        >,
+    ) -> Result<Self, Self::Error> {
         let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
 
         Ok(Self {
@@ -1477,7 +1485,7 @@ impl<F, Req>
         ),
     ) -> Result<Self, Self::Error> {
         let status = hyperswitch_common_enums::enums::RefundStatus::Pending;
-        
+
         let refunds_response_data = RefundsResponseData {
             connector_refund_id: response.psp_reference,
             refund_status: status,

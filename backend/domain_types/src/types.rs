@@ -10,7 +10,8 @@ use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
-    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse, RefundsSyncResponse, RefundsResponse,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse, RefundsResponse,
+    RefundsSyncResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
@@ -1272,24 +1273,25 @@ impl ForeignTryFrom<grpc_api_types::payments::RefundsRequest> for RefundsData {
     fn foreign_try_from(
         value: grpc_api_types::payments::RefundsRequest,
     ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let minor_refund_amount =
+            hyperswitch_common_utils::types::MinorUnit::new(value.minor_refund_amount);
 
-        let minor_refund_amount = hyperswitch_common_utils::types::MinorUnit::new(value.minor_refund_amount);
-
-        let minor_payment_amount = hyperswitch_common_utils::types::MinorUnit::new(value.minor_payment_amount);
+        let minor_payment_amount =
+            hyperswitch_common_utils::types::MinorUnit::new(value.minor_payment_amount);
 
         Ok(RefundsData {
             refund_id: value.refund_id.to_string(),
             connector_transaction_id: value.connector_transaction_id.clone(),
             connector_refund_id: value.connector_refund_id.clone(),
             currency: hyperswitch_common_enums::Currency::foreign_try_from(value.currency())?,
-            payment_amount: value.payment_amount.clone(),
+            payment_amount: value.payment_amount,
             reason: value.reason.clone(),
             webhook_url: None,
-            refund_amount: value.refund_amount.clone(),
+            refund_amount: value.refund_amount,
             connector_metadata: None,
             refund_connector_metadata: None,
-            minor_payment_amount: minor_payment_amount,
-            minor_refund_amount: minor_refund_amount,
+            minor_payment_amount,
+            minor_refund_amount,
             refund_status: hyperswitch_common_enums::RefundStatus::Pending,
             merchant_account_id: None,
             capture_method: None,

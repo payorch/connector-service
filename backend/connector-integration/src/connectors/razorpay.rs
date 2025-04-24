@@ -3,11 +3,11 @@ pub mod transformers;
 use domain_types::{
     connector_flow::{Authorize, CreateOrder, PSync, RSync, Refund},
     connector_types::{
-        ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2, PaymentFlowData,
+        ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
+        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RefundFlowData, RefundSyncData, RefundSyncV2, RefundsResponseData,
-        RequestDetails, WebhookDetailsResponse, ConnectorServiceTrait, PaymentCreateOrderData,
-        PaymentCreateOrderResponse, PaymentOrderCreate, ValidationTrait, RefundV2, RefundsData,
+        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData, RefundsResponseData,
+        RequestDetails, ValidationTrait, WebhookDetailsResponse,
     },
 };
 use hyperswitch_common_utils::{
@@ -444,7 +444,10 @@ impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsRespon
         req: &RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData>,
     ) -> CustomResult<String, errors::ConnectorError> {
         let refund_id = req.request.connector_refund_id.clone();
-        Ok(format!("{}v1/refunds/{}", req.resource_common_data.connectors.razorpay.base_url, refund_id))
+        Ok(format!(
+            "{}v1/refunds/{}",
+            req.resource_common_data.connectors.razorpay.base_url, refund_id
+        ))
     }
 
     fn handle_response_v2(

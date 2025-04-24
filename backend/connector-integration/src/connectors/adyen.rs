@@ -32,8 +32,8 @@ use domain_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
         PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData,
-        RefundsResponseData, RequestDetails, ValidationTrait, WebhookDetailsResponse,
+        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData, RefundsResponseData,
+        RequestDetails, ValidationTrait, WebhookDetailsResponse,
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
@@ -417,7 +417,9 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
         let connector_payment_id = req.request.connector_transaction_id.clone();
         Ok(format!(
             "{}{}/payments/{}/refunds",
-            req.resource_common_data.connectors.adyen.base_url, ADYEN_API_VERSION, connector_payment_id
+            req.resource_common_data.connectors.adyen.base_url,
+            ADYEN_API_VERSION,
+            connector_payment_id
         ))
     }
 
@@ -445,14 +447,11 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
             .response
             .parse_struct("AdyenRefundResponse")
             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
-        event_builder.map(|i| i.set_response_body(&response));
-        
-        RouterDataV2::foreign_try_from((
-            response,
-            data.clone(),
-            res.status_code,
-        ))
-        .change_context(errors::ConnectorError::ResponseHandlingFailed)
+
+        with_response_body!(event_builder, response);
+
+        RouterDataV2::foreign_try_from((response, data.clone(), res.status_code))
+            .change_context(errors::ConnectorError::ResponseHandlingFailed)
     }
 
     fn get_error_response_v2(
