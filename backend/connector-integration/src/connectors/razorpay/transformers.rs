@@ -756,13 +756,13 @@ impl<F, Req>
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayErrorResponse {
-    pub error: Error,
+    pub error: RazorpayError,
 }
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct Error {
+pub struct RazorpayError {
     pub code: String,
     pub description: String,
     pub source: String,
