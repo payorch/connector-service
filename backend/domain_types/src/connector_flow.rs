@@ -12,3 +12,6 @@ pub struct RSync;
 
 #[derive(Debug, Clone)]
 pub struct Refund;
+
+#[derive(Debug, Clone)]
+pub struct Capture;

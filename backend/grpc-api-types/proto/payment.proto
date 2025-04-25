@@ -8,6 +8,7 @@ service PaymentService {
   rpc RefundSync(RefundsSyncRequest) returns (RefundsSyncResponse);
   rpc IncomingWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
   rpc Refund(RefundsRequest) returns (RefundsResponse);
+  rpc PaymentCapture(PaymentsCaptureRequest) returns (PaymentsCaptureResponse);
 }
 
 message PaymentsAuthorizeRequest {
@@ -1021,4 +1022,28 @@ enum RefundStatus {
   REFUND_PENDING = 2;
   REFUND_SUCCESS = 3;
   REFUND_TRANSACTION_FAILURE = 4;
+}
+
+message MultipleCaptureRequestData {
+    int64 capture_sequence = 2;
+    string capture_reference = 4;
+}
+
+message PaymentsCaptureRequest {
+  string connector_transaction_id = 1;
+  Connector connector = 35;
+  AuthType auth_creds = 34;
+  int64 amount_to_capture = 2;
+  Currency currency = 15;
+  optional MultipleCaptureRequestData multiple_capture_data = 21;
+  optional bytes connector_meta_data = 3;
+}
+
+
+message PaymentsCaptureResponse {
+  ResponseId resource_id = 1;
+  optional string connector_response_reference_id = 2;
+  AttemptStatus status = 8;
+  optional string error_code = 3;
+  optional string error_message = 4;
 }

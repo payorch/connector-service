@@ -1,7 +1,9 @@
 use domain_types::{
-    connector_flow::{Authorize, Refund},
+    connector_flow::{
+        Capture, {Authorize, Refund},
+    },
     connector_types::{
-        EventType, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, RefundFlowData, RefundsData,
+        EventType, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData, PaymentsResponseData, RefundFlowData, RefundsData,
         RefundsResponseData,
     },
 };
@@ -1541,3 +1543,99 @@ impl<F, Req>
         })
     }
 }
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenCaptureRequest {
+    merchant_account: Secret<String>,
+    amount: Amount,
+    reference: String,
+}
+
+impl
+    TryFrom<
+        &AdyenRouterData<
+            &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+        >,
+    > for AdyenCaptureRequest
+{
+    type Error = Error;
+    fn try_from(
+        item: &AdyenRouterData<
+            &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+        >,
+    ) -> Result<Self, Self::Error> {
+        let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
+        let reference = match item.router_data.request.multiple_capture_data.clone() {
+            // if multiple capture request, send capture_id as our reference for the capture
+            Some(multiple_capture_request_data) => multiple_capture_request_data.capture_reference,
+            // if single capture request, send connector_request_reference_id(attempt_id)
+            None => item.router_data.connector_request_reference_id.clone(),
+        };
+        Ok(Self {
+            merchant_account: auth_type.merchant_account,
+            reference,
+            amount: Amount {
+                currency: item.router_data.request.currency,
+                value: item.amount.to_owned(),
+            },
+        })
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenCaptureResponse {
+    merchant_account: Secret<String>,
+    payment_psp_reference: String,
+    psp_reference: String,
+    reference: String,
+    status: String,
+    amount: Amount,
+    merchant_reference: Option<String>,
+    store: Option<String>,
+    splits: Option<Vec<AdyenSplitData>>,
+}
+
+impl<F, Req>
+    ForeignTryFrom<(
+        AdyenCaptureResponse,
+        RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>,
+        bool,
+    )> for RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>
+{
+    type Error = Error;
+    fn foreign_try_from(
+        (response, data, is_multiple_capture_psync_flow): (
+            AdyenCaptureResponse,
+            RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>,
+            bool,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let connector_transaction_id = if is_multiple_capture_psync_flow {
+            response.psp_reference.clone()
+        } else {
+            response.payment_psp_reference
+        };
+
+        Ok(Self {
+            response: Ok(PaymentsResponseData::TransactionResponse {
+                resource_id: ResponseId::ConnectorTransactionId(connector_transaction_id),
+                redirection_data: Box::new(None),
+                connector_metadata: None,
+                network_txn_id: None,
+                connector_response_reference_id: Some(response.reference),
+                incremental_authorization_allowed: None,
+            }),
+            resource_common_data: PaymentFlowData {
+                // From the docs, the only value returned is "received", outcome of refund is available
+                // through refund notification webhook
+                // For more info: https://docs.adyen.com/online-payments/capture
+                status: AttemptStatus::Pending,
+                ..data.resource_common_data
+            },
+            ..data
+        })
+    }
+}
+

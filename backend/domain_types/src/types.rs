@@ -1,17 +1,18 @@
 use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
-use crate::connector_flow::{Authorize, PSync, RSync, Refund};
+use crate::connector_flow::{Authorize, Capture, PSync, RSync, Refund};
 use crate::connector_types::{
-    PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData, RefundFlowData,
-    RefundSyncData, RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, WebhookDetailsResponse,
+    MultipleCaptureRequestData, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData,
+    PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundWebhookDetailsResponse, RefundsData,
+    RefundsResponseData, WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
-    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsSyncResponse, RefundsResponse,
-    RefundsSyncResponse,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsCaptureResponse,
+    RefundsSyncResponse, PaymentsSyncResponse, RefundsResponse
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
@@ -1349,3 +1350,135 @@ pub fn generate_refund_response(
         }
     }
 }
+
+impl ForeignTryFrom<grpc_api_types::payments::PaymentsCaptureRequest> for PaymentsCaptureData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: grpc_api_types::payments::PaymentsCaptureRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let connector_transaction_id =
+            ResponseId::ConnectorTransactionId(value.connector_transaction_id.clone());
+
+        let multiple_capture_data =
+            value
+                .multiple_capture_data
+                .clone()
+                .map(|data| MultipleCaptureRequestData {
+                    capture_sequence: data.capture_sequence,
+                    capture_reference: data.capture_reference,
+                });
+
+        let minor_amount = hyperswitch_common_utils::types::MinorUnit::new(value.amount_to_capture);
+
+        Ok(Self {
+            amount_to_capture: value.amount_to_capture,
+            minor_amount_to_capture: minor_amount,
+            currency: hyperswitch_common_enums::Currency::foreign_try_from(value.currency())?,
+            connector_transaction_id,
+            multiple_capture_data,
+            connector_metadata: None,
+        })
+    }
+}
+
+impl ForeignTryFrom<(grpc_api_types::payments::PaymentsCaptureRequest, Connectors)>
+    for PaymentFlowData
+{
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        (value, connectors): (grpc_api_types::payments::PaymentsCaptureRequest, Connectors),
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(Self {
+            merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
+            payment_id: "PAYMENT_ID".to_string(),
+            attempt_id: "ATTEMPT_ID".to_string(),
+            status: hyperswitch_common_enums::AttemptStatus::Pending,
+            payment_method: hyperswitch_common_enums::PaymentMethod::Card, // Default
+            address: hyperswitch_domain_models::payment_address::PaymentAddress::default(),
+            auth_type: hyperswitch_common_enums::AuthenticationType::default(),
+            connector_request_reference_id: value.connector_transaction_id,
+            customer_id: None,
+            connector_customer: None,
+            description: None,
+            return_url: None,
+            connector_meta_data: None,
+            amount_captured: None,
+            minor_amount_captured: None,
+            access_token: None,
+            session_token: None,
+            reference_id: None,
+            payment_method_token: None,
+            preprocessing_id: None,
+            connector_api_version: None,
+            test_mode: None,
+            connector_http_status_code: None,
+            external_latency: None,
+            connectors,
+        })
+    }
+}
+
+pub fn generate_payment_capture_response(
+    router_data_v2: RouterDataV2<
+        Capture,
+        PaymentFlowData,
+        PaymentsCaptureData,
+        PaymentsResponseData,
+    >,
+) -> Result<PaymentsCaptureResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let transaction_response = router_data_v2.response;
+
+    match transaction_response {
+        Ok(response) => match response {
+            PaymentsResponseData::TransactionResponse {
+                resource_id,
+                redirection_data: _,
+                connector_metadata: _,
+                network_txn_id:_,
+                connector_response_reference_id,
+                incremental_authorization_allowed:_,
+            } => {
+                let status = router_data_v2.resource_common_data.status;
+                let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
+                let grpc_resource_id =
+                    grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)?;
+
+                Ok(PaymentsCaptureResponse {
+                    resource_id: Some(grpc_resource_id),
+                    connector_response_reference_id,
+                    error_code: None,
+                    error_message: None,
+                    status: grpc_status.into(),
+                })
+            }
+            _ => Err(report!(ApplicationErrorResponse::InternalServerError(
+                ApiError {
+                    sub_code: "INVALID_RESPONSE_TYPE".to_owned(),
+                    error_identifier: 500,
+                    error_message: "Invalid response type received from connector".to_owned(),
+                    error_object: None,
+                }
+            ))),
+        },
+        Err(e) => {
+            let status = e
+                .attempt_status
+                .map(grpc_api_types::payments::AttemptStatus::foreign_from)
+                .unwrap_or_default();
+            Ok(PaymentsCaptureResponse {
+                resource_id: Some(grpc_api_types::payments::ResponseId {
+                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                        false,
+                    )),
+                }),
+                connector_response_reference_id: e.connector_transaction_id,
+                status: status.into(),
+                error_message: Some(e.message),
+                error_code: Some(e.code),
+            })
+        }
+    }
+}
+

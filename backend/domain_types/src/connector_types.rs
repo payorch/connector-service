@@ -1,4 +1,4 @@
-use crate::connector_flow::{self, Authorize, PSync, RSync, Refund};
+use crate::connector_flow::{self, Authorize, Capture, PSync, RSync, Refund};
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::Connectors;
 use crate::utils::ForeignTryFrom;
@@ -45,6 +45,7 @@ pub trait ConnectorServiceTrait:
     + RefundSyncV2
     + IncomingWebhook
     + RefundV2
+    + PaymentCapture
 {
 }
 
@@ -78,6 +79,11 @@ pub trait PaymentSyncV2:
 
 pub trait RefundV2:
     ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>
+{
+}
+
+pub trait PaymentCapture:
+    ConnectorIntegrationV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>
 {
 }
 
@@ -403,4 +409,20 @@ pub struct RefundsData {
     pub refund_status: hyperswitch_common_enums::RefundStatus,
     pub merchant_account_id: Option<String>,
     pub capture_method: Option<hyperswitch_common_enums::CaptureMethod>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MultipleCaptureRequestData {
+    pub capture_sequence: i64,
+    pub capture_reference: String,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct PaymentsCaptureData {
+    pub amount_to_capture: i64,
+    pub minor_amount_to_capture: MinorUnit,
+    pub currency: hyperswitch_common_enums::Currency,
+    pub connector_transaction_id: ResponseId,
+    pub multiple_capture_data: Option<MultipleCaptureRequestData>,
+    pub connector_metadata: Option<serde_json::Value>,
 }

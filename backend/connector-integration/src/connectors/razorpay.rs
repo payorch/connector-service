@@ -1,13 +1,14 @@
 pub mod transformers;
 pub mod tests;
 use domain_types::{
-    connector_flow::{Authorize, CreateOrder, PSync, RSync, Refund},
+    connector_flow::{Authorize, Capture, CreateOrder, PSync, RSync, Refund},
     connector_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, EventType, IncomingWebhook, PaymentAuthorizeV2,
-        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
-        PaymentSyncV2, PaymentsAuthorizeData, PaymentsResponseData, PaymentsSyncData,
-        RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2, RefundsData, RefundsResponseData,
-        RequestDetails, ValidationTrait, WebhookDetailsResponse,
+        PaymentCapture, PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData,
+        PaymentOrderCreate, PaymentSyncV2, PaymentsAuthorizeData, PaymentsCaptureData,
+        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundSyncV2,
+        RefundV2, RefundsData, RefundsResponseData, RequestDetails, ValidationTrait,
+        WebhookDetailsResponse,
     },
 };
 use hyperswitch_common_utils::{
@@ -62,6 +63,7 @@ impl PaymentSyncV2 for Razorpay {}
 impl PaymentOrderCreate for Razorpay {}
 impl RefundSyncV2 for Razorpay {}
 impl RefundV2 for Razorpay {}
+impl PaymentCapture for Razorpay {}
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
@@ -634,3 +636,8 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
     }
 }
 
+
+impl ConnectorIntegrationV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>
+    for Razorpay
+{
+}
