@@ -752,14 +752,30 @@ impl<F, Req>
     }
 }
 
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct RazorpayErrorResponse {
-    pub status: i32,
-    pub error_code: String,
-    pub message: String,
-    pub error_type: String,
-    pub psp_reference: Option<String>,
+    pub error: Error,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Error {
+    pub code: String,
+    pub description: String,
+    pub source: String,
+    pub step: String,
+    pub reason: String,
+    pub metadata: Option<Metadata>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Metadata {
+    pub order_id: Option<String>,
 }
 
 #[serde_with::skip_serializing_none]

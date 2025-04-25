@@ -408,7 +408,7 @@ async fn handle_response(
                         report!(error).change_context(ApiClientError::ResponseDecodingFailed)
                     })?;
 
-                    Ok(Ok(Response {
+                    Ok(Err(Response {
                         headers,
                         response: bytes,
                         status_code,
@@ -420,7 +420,7 @@ async fn handle_response(
                         report!(error).change_context(ApiClientError::ResponseDecodingFailed)
                     })?;
 
-                    Ok(Ok(Response {
+                    Ok(Err(Response {
                         headers,
                         response: bytes,
                         status_code,

@@ -1,5 +1,5 @@
 pub mod transformers;
-
+pub mod tests;
 use domain_types::{
     connector_flow::{Authorize, CreateOrder, PSync, RSync, Refund},
     connector_types::{
@@ -109,11 +109,11 @@ impl ConnectorCommon for Razorpay {
 
         Ok(ErrorResponse {
             status_code: res.status_code,
-            code: response.error_code,
-            message: response.message.to_owned(),
-            reason: Some(response.message),
+            code: response.error.code,
+            message: response.error.description,
+            reason: Some(response.error.reason),
             attempt_status: None,
-            connector_transaction_id: response.psp_reference,
+            connector_transaction_id: None,
         })
     }
 }
@@ -252,13 +252,6 @@ impl ConnectorIntegrationV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsRe
             req.resource_common_data.connectors.razorpay.base_url, payment_id
         ))
     }
-
-    // fn get_request_body(
-    //     &self,
-    //     req: &RouterDataV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>,
-    // ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
-
-    // }
 
     fn handle_response_v2(
         &self,
