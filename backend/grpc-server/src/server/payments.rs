@@ -1,4 +1,7 @@
-use crate::{configs::Config, utils::connector_from_metadata};
+use crate::{
+    configs::Config,
+    utils::{auth_from_metadata, connector_from_metadata},
+};
 use connector_integration::types::ConnectorData;
 use domain_types::{
     connector_flow::{Authorize, Capture, CreateOrder, PSync, RSync, Refund},
@@ -118,6 +121,7 @@ impl PaymentService for Payments {
         info!("PAYMENT_AUTHORIZE_FLOW: initiated");
 
         let connector = connector_from_metadata(request.metadata())?;
+        let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         //get connector data
@@ -141,28 +145,6 @@ impl PaymentService for Payments {
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(
                     "Invalid request data: {}",
-                    e
-                )))
-            }
-        };
-
-        // Extract auth credentials
-        let auth_creds = payload.auth_creds.clone();
-
-        let auth_creds = match auth_creds {
-            Some(auth_creds) => auth_creds,
-            None => {
-                return Err(tonic::Status::invalid_argument(
-                    "Missing auth_creds in request",
-                ))
-            }
-        };
-
-        let connector_auth_details = match ConnectorAuthType::foreign_try_from(auth_creds) {
-            Ok(auth_type) => auth_type,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid auth_creds in request: {}",
                     e
                 )))
             }
@@ -245,6 +227,7 @@ impl PaymentService for Payments {
         info!("PAYMENT_SYNC_FLOW: initiated");
 
         let connector = connector_from_metadata(request.metadata())?;
+        let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         // Get connector data
@@ -258,9 +241,6 @@ impl PaymentService for Payments {
             PaymentsSyncData,
             PaymentsResponseData,
         > = connector_data.connector.get_connector_integration_v2();
-
-        // Extract auth credentials
-        let auth_creds = payload.auth_creds.clone();
 
         // Create connector request data
         let payment_sync_data = match PaymentsSyncData::foreign_try_from(payload.clone()) {
@@ -282,25 +262,6 @@ impl PaymentService for Payments {
             Err(e) => {
                 return Err(tonic::Status::invalid_argument(format!(
                     "Invalid flow data: {}",
-                    e
-                )))
-            }
-        };
-
-        let auth_creds = match auth_creds {
-            Some(auth_creds) => auth_creds,
-            None => {
-                return Err(tonic::Status::invalid_argument(
-                    "Missing auth_creds in request".to_string(),
-                ))
-            }
-        };
-
-        let connector_auth_details = match ConnectorAuthType::foreign_try_from(auth_creds) {
-            Ok(auth_type) => auth_type,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid auth_creds in request: {}",
                     e
                 )))
             }
@@ -353,6 +314,7 @@ impl PaymentService for Payments {
         info!("REFUND_SYNC_FLOW: initiated");
 
         let connector = connector_from_metadata(request.metadata())?;
+        let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         // Get connector data
@@ -367,9 +329,6 @@ impl PaymentService for Payments {
             RefundsResponseData,
         > = connector_data.connector.get_connector_integration_v2();
 
-        // Extract auth credentials
-        let auth_creds = payload.auth_creds.clone();
-
         let refund_sync_data = RefundSyncData::foreign_try_from(payload.clone())
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid request data: {}", e)))?;
 
@@ -379,20 +338,6 @@ impl PaymentService for Payments {
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
                 })?;
-
-        let auth_creds = match auth_creds {
-            Some(auth_creds) => auth_creds,
-            None => {
-                return Err(tonic::Status::invalid_argument(
-                    "Missing auth_creds in request".to_string(),
-                ))
-            }
-        };
-
-        let connector_auth_details =
-            ConnectorAuthType::foreign_try_from(auth_creds).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
-            })?;
 
         // Create router data
         let router_data: RouterDataV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData> =
@@ -424,6 +369,7 @@ impl PaymentService for Payments {
         request: tonic::Request<IncomingWebhookRequest>,
     ) -> Result<tonic::Response<IncomingWebhookResponse>, tonic::Status> {
         let connector = connector_from_metadata(request.metadata())?;
+        let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         let request_details = payload
@@ -452,15 +398,6 @@ impl PaymentService for Payments {
             })
             .transpose()?;
 
-        let connector_auth_details = payload
-            .auth_creds
-            .map(|creds| {
-                ConnectorAuthType::foreign_try_from(creds).map_err(|e| {
-                    tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
-                })
-            })
-            .transpose()?;
-
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
 
@@ -469,7 +406,8 @@ impl PaymentService for Payments {
             .verify_webhook_source(
                 request_details.clone(),
                 webhook_secrets.clone(),
-                connector_auth_details.clone(),
+                // TODO: do we need to force authentication? we can make it optional
+                Some(connector_auth_details.clone()),
             )
             .map_err(|e| {
                 tonic::Status::internal(format!(
@@ -483,7 +421,7 @@ impl PaymentService for Payments {
             .get_event_type(
                 request_details.clone(),
                 webhook_secrets.clone(),
-                connector_auth_details.clone(),
+                Some(connector_auth_details.clone()),
             )
             .map_err(|e| {
                 tonic::Status::internal(format!(
@@ -499,7 +437,7 @@ impl PaymentService for Payments {
                     connector_data,
                     request_details,
                     webhook_secrets,
-                    connector_auth_details,
+                    Some(connector_auth_details),
                 )
                 .await?
             }
@@ -508,7 +446,7 @@ impl PaymentService for Payments {
                     connector_data,
                     request_details,
                     webhook_secrets,
-                    connector_auth_details,
+                    Some(connector_auth_details),
                 )
                 .await?
             }
@@ -535,6 +473,7 @@ impl PaymentService for Payments {
         info!("REFUND_FLOW: initiated");
 
         let connector = connector_from_metadata(request.metadata())?;
+        let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         // Get connector data
@@ -549,9 +488,6 @@ impl PaymentService for Payments {
             RefundsResponseData,
         > = connector_data.connector.get_connector_integration_v2();
 
-        // Extract auth credentials
-        let auth_creds = payload.auth_creds.clone();
-
         let refund_data = RefundsData::foreign_try_from(payload.clone())
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid request data: {}", e)))?;
 
@@ -561,15 +497,6 @@ impl PaymentService for Payments {
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
                 })?;
-
-        let auth_creds = auth_creds.ok_or(tonic::Status::invalid_argument(
-            "Missing auth_creds in request".to_string(),
-        ))?;
-
-        let connector_auth_details =
-            ConnectorAuthType::foreign_try_from(auth_creds).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
-            })?;
 
         // Create router data
         let router_data: RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData> =
@@ -603,6 +530,7 @@ impl PaymentService for Payments {
         info!("PAYMENT_CAPTURE_FLOW: initiated");
 
         let connector = connector_from_metadata(request.metadata())?;
+        let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         //get connector data
@@ -617,9 +545,6 @@ impl PaymentService for Payments {
             PaymentsResponseData,
         > = connector_data.connector.get_connector_integration_v2();
 
-        // Extract auth credentials
-        let auth_creds = payload.auth_creds.clone();
-
         // Create connector request data
         let payment_capture_data = PaymentsCaptureData::foreign_try_from(payload.clone())
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid request data: {}", e)))?;
@@ -630,15 +555,6 @@ impl PaymentService for Payments {
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
                 })?;
-
-        let auth_creds = auth_creds.ok_or(tonic::Status::invalid_argument(
-            "Missing auth_creds in request".to_string(),
-        ))?;
-
-        let connector_auth_details =
-            ConnectorAuthType::foreign_try_from(auth_creds).map_err(|e| {
-                tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
-            })?;
 
         // Create router data
         let router_data = RouterDataV2 {
@@ -659,7 +575,6 @@ impl PaymentService for Payments {
 
         let capture_response = generate_payment_capture_response(response)
             .map_err(|e| tonic::Status::internal(format!("Response generation error: {}", e)))?;
-
         Ok(tonic::Response::new(capture_response))
     }
 }

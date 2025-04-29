@@ -17,8 +17,8 @@ use grpc_api_types::payments::{
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
 use hyperswitch_domain_models::{
-    payment_method_data::PaymentMethodData, router_data::ConnectorAuthType,
-    router_data_v2::RouterDataV2, router_request_types::ResponseId,
+    payment_method_data::PaymentMethodData, router_data_v2::RouterDataV2,
+    router_request_types::ResponseId,
 };
 
 #[derive(Clone, serde::Deserialize, Debug)]
@@ -796,55 +796,6 @@ impl ForeignTryFrom<(PaymentsAuthorizeRequest, Connectors)> for PaymentFlowData 
             connector_http_status_code: None,
             external_latency: None,
             connectors,
-        })
-    }
-}
-
-impl ForeignTryFrom<grpc_api_types::payments::AuthType> for ConnectorAuthType {
-    type Error = ApplicationErrorResponse;
-    fn foreign_try_from(
-        value: grpc_api_types::payments::AuthType,
-    ) -> Result<Self, error_stack::Report<Self::Error>> {
-        let auth_details = value.auth_details.ok_or_else(|| {
-            ApplicationErrorResponse::BadRequest(ApiError {
-                sub_code: "INVALID_PAYMENT_METHOD_DATA".to_owned(),
-                error_identifier: 400,
-                error_message: "Payment method data is required".to_owned(),
-                error_object: None,
-            })
-        })?;
-        Ok(match auth_details {
-            grpc_api_types::payments::auth_type::AuthDetails::HeaderKey(header_key) => {
-                Self::HeaderKey {
-                    api_key: header_key.api_key.into(),
-                }
-            }
-            grpc_api_types::payments::auth_type::AuthDetails::BodyKey(body_key) => Self::BodyKey {
-                api_key: body_key.api_key.into(),
-                key1: body_key.key1.into(),
-            },
-            grpc_api_types::payments::auth_type::AuthDetails::SignatureKey(signature_key) => {
-                Self::SignatureKey {
-                    api_key: signature_key.api_key.into(),
-                    key1: signature_key.key1.into(),
-                    api_secret: signature_key.api_secret.into(),
-                }
-            }
-            grpc_api_types::payments::auth_type::AuthDetails::MultiAuthKey(multi_auth_key) => {
-                Self::MultiAuthKey {
-                    api_key: multi_auth_key.api_key.into(),
-                    key1: multi_auth_key.key1.into(),
-                    api_secret: multi_auth_key.key2.clone().into(),
-                    key2: multi_auth_key.key2.into(),
-                }
-            }
-            grpc_api_types::payments::auth_type::AuthDetails::CertificateAuth(certificate_auth) => {
-                Self::CertificateAuth {
-                    certificate: certificate_auth.certificate.into(),
-                    private_key: certificate_auth.private_key.into(),
-                }
-            }
-            grpc_api_types::payments::auth_type::AuthDetails::NoKey(_) => Self::NoKey,
         })
     }
 }
