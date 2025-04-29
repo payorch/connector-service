@@ -59,7 +59,7 @@ pub fn auth_from_metadata(
         }),
         "body-key" => Ok(ConnectorAuthType::BodyKey {
             api_key: parse_metadata(metadata, X_API_KEY)?.to_string().into(),
-            key1: parse_metadata(metadata, "key1")?.to_string().into(),
+            key1: parse_metadata(metadata, X_KEY1)?.to_string().into(),
         }),
         "signature-key" => Ok(ConnectorAuthType::SignatureKey {
             api_key: parse_metadata(metadata, X_API_KEY)?.to_string().into(),

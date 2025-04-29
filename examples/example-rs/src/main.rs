@@ -60,6 +60,15 @@ async fn make_payment_authorization_request(
         //         },
         //     )),
         // }),
+        // connector: payments::Connector::Adyen as i32,
+        // auth_creds: Some(payments::AuthType {
+        //     auth_details: Some(payments::auth_type::AuthDetails::BodyKey(  // Changed to BodyKey
+        //         payments::BodyKey {
+        //             api_key,
+        //             key1
+        //         },
+        //     )),
+        // }),
         payment_method: payments::PaymentMethod::Card as i32,
         payment_method_data: Some(payments::PaymentMethodData {
             data: Some(payments::payment_method_data::Data::Card(payments::Card {
@@ -70,6 +79,8 @@ async fn make_payment_authorization_request(
                 ..Default::default()
             })),
         }),
+        connector_customer: Some("customer_12345".to_string()),
+        return_url: Some("www.google.com".to_string()),
         address: Some(payments::PaymentAddress::default()),
         auth_type: payments::AuthenticationType::ThreeDs as i32,
         connector_request_reference_id: "ref_12345".to_string(),
@@ -155,7 +166,6 @@ async fn make_payment_sync_request(
         .metadata_mut()
         .append("x-key1", key1.parse().unwrap());
 
-    // Send the request
     let response = client.payment_sync(request).await?;
 
     Ok(response)
