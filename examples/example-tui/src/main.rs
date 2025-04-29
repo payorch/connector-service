@@ -3,14 +3,17 @@
 // --- Imports ---
 use anyhow::{Context, Result, anyhow};
 use shelgon::{command, renderer}; // Import shelgon types
-use std::str::FromStr;
+use std::{env, str::FromStr};
 use strum::{EnumString, EnumVariantNames, VariantNames}; // For parsing enums
 use tokio::runtime::Runtime; // Need runtime for blocking async calls
 // Import Endpoint for client connection
-use tonic::transport::{Channel, Endpoint}; // <-- Added Endpoint
+use tonic::{
+    metadata::MetadataValue,
+    transport::{Channel, Endpoint},
+}; // <-- Added Endpoint
 
 // --- Use gRPC types from the crate ---
-use grpc_api_types::payments;
+use grpc_api_types::payments::{self, Address};
 
 // --- Type Aliases ---
 // Alias for the client type
@@ -96,7 +99,7 @@ enum AuthDetailsChoice {
 struct AppState {
     url: Option<String>,
     connector: Option<ConnectorChoice>,
-    auth_details: Option<AuthDetailsChoice>,
+    auth_details: Option<String>,
     card_number: Option<String>,
     card_exp_month: Option<String>,
     card_exp_year: Option<String>,
@@ -105,6 +108,9 @@ struct AppState {
     currency: Option<i32>,
     resource_id: Option<String>,
     email: Option<String>,
+    api_key: Option<String>,
+    key1: Option<String>,
+    api_secret: Option<String>,
 }
 
 // --- Shelgon Context ---
@@ -131,7 +137,8 @@ async fn connect_client(url: &str) -> Result<PaymentClient> {
     // Optional: Configure endpoint (e.g., timeouts)
     // let endpoint = endpoint.connect_timeout(std::time::Duration::from_secs(5));
 
-    let channel = endpoint.connect()
+    let channel = endpoint
+        .connect()
         .await
         .with_context(|| format!("Failed to connect channel to gRPC server at URL: {}", url))?;
 
@@ -222,49 +229,61 @@ fn handle_set(args: &[String], ctx: &mut ShellContext) -> Result<String> {
             state.resource_id = Some(value_parts[0].clone());
             Ok(format!("Resource ID set to: {}", value_parts[0]))
         }
+        // "auth" => {
+        //     if value_parts.len() < 1 {
+        //         return Err(anyhow!("Usage: set auth <type> [params...]"));
+        //     }
+        //     let auth_type = value_parts[0].to_lowercase();
+        //     match auth_type.as_str() {
+        //         "bodykey" => {
+        //             if value_parts.len() != 3 {
+        //                 return Err(anyhow!("Usage: set auth bodykey <api_key> <key1>"));
+        //             }
+        //             state.auth_details = Some(AuthDetailsChoice::BodyKey {
+        //                 api_key: value_parts[1].clone(),
+        //                 key1: value_parts[2].clone(),
+        //             });
+        //             Ok("Auth set to: BodyKey".to_string())
+        //         }
+        //         "headerkey" => {
+        //             // Updated headerkey to expect only api_key
+        //             if value_parts.len() != 2 {
+        //                 // <-- Changed from 3 to 2
+        //                 return Err(anyhow!("Usage: set auth headerkey <api_key>")); // <-- Updated usage
+        //             }
+        //             state.auth_details = Some(AuthDetailsChoice::HeaderKey {
+        //                 api_key: value_parts[1].clone(), // <-- Only api_key
+        //             });
+        //             Ok("Auth set to: HeaderKey".to_string())
+        //         }
+        //         "signaturekey" => {
+        //             if value_parts.len() != 4 {
+        //                 return Err(anyhow!("Usage: set auth bodykey <api_key> <key1>"));
+        //             }
+        //             state.auth_details = Some(AuthDetailsChoice::SignatureKey {
+        //                 api_key: value_parts[1].clone(),
+        //                 key1: value_parts[2].clone(),
+        //                 api_secret: value_parts[3].clone(),
+        //             });
+        //             Ok("Auth set to: SignatureKey".to_string())
+        //         }
+        //         _ => Err(anyhow!(
+        //             "Unknown auth type: {}. Supported: bodykey, headerkey",
+        //             auth_type
+        //         )),
+        //     }
+        // }
+        "api_key" => {
+            state.api_key = Some(value_parts[0].to_string());
+            Ok(format!("API key set to: {}", value_parts[0]))
+        }
+        "key1" => {
+            state.key1 = Some(value_parts[0].to_string());
+            Ok(format!("Key1 set to: {}", value_parts[0]))
+        }
         "auth" => {
-            if value_parts.len() < 1 {
-                return Err(anyhow!("Usage: set auth <type> [params...]"));
-            }
-            let auth_type = value_parts[0].to_lowercase();
-            match auth_type.as_str() {
-                "bodykey" => {
-                    if value_parts.len() != 3 {
-                        return Err(anyhow!("Usage: set auth bodykey <api_key> <key1>"));
-                    }
-                    state.auth_details = Some(AuthDetailsChoice::BodyKey {
-                        api_key: value_parts[1].clone(),
-                        key1: value_parts[2].clone(),
-                    });
-                    Ok("Auth set to: BodyKey".to_string())
-                }
-                "headerkey" => {
-                    // Updated headerkey to expect only api_key
-                    if value_parts.len() != 2 {
-                        // <-- Changed from 3 to 2
-                        return Err(anyhow!("Usage: set auth headerkey <api_key>")); // <-- Updated usage
-                    }
-                    state.auth_details = Some(AuthDetailsChoice::HeaderKey {
-                        api_key: value_parts[1].clone(), // <-- Only api_key
-                    });
-                    Ok("Auth set to: HeaderKey".to_string())
-                }
-                "signaturekey" => {
-                    if value_parts.len() != 4 {
-                        return Err(anyhow!("Usage: set auth bodykey <api_key> <key1>"));
-                    }
-                    state.auth_details = Some(AuthDetailsChoice::SignatureKey {
-                        api_key: value_parts[1].clone(),
-                        key1: value_parts[2].clone(),
-                        api_secret: value_parts[3].clone(),
-                    });
-                    Ok("Auth set to: SignatureKey".to_string())
-                }
-                _ => Err(anyhow!(
-                    "Unknown auth type: {}. Supported: bodykey, headerkey",
-                    auth_type
-                )),
-            }
+            state.auth_details = Some(value_parts[0].to_string());
+            Ok(format!("Auth set to: {}", value_parts[0]))
         }
         "card" => {
             if value_parts.len() < 2 {
@@ -330,6 +349,14 @@ fn handle_unset(args: &[String], ctx: &mut ShellContext) -> Result<String> {
             state.email = None;
             Ok("Email unset".to_string())
         }
+        "api_key" => {
+            state.api_key = None;
+            Ok("Api key unset".to_string())
+        }
+        "key1" => {
+            state.key1 = None;
+            Ok("Key1 unset".to_string())
+        }
         "resource_id" => {
             state.resource_id = None;
             Ok("Resource ID unset".to_string())
@@ -383,14 +410,14 @@ async fn handle_call_async(args: &[String], ctx: &mut ShellContext) -> Result<St
 
     let mut client = connect_client(&state.url.as_ref().unwrap()).await?;
 
-    let auth_creds = state
-        .auth_details
-        .clone()
-        .ok_or_else(|| anyhow!("Authentication details are not set."))?
-        .into();
-    let connector_val = state
-        .connector
-        .ok_or_else(|| anyhow!("Connector is not set."))?;
+    // let auth_creds = state
+    //     .auth_details
+    //     .clone()
+    //     .ok_or_else(|| anyhow!("Authentication details are not set."))?
+    //     .into();
+    // let connector_val = state
+    //     .connector
+    //     .ok_or_else(|| anyhow!("Connector is not set."))?;
 
     match operation.as_str() {
         "authorize" => {
@@ -420,6 +447,8 @@ async fn handle_call_async(args: &[String], ctx: &mut ShellContext) -> Result<St
                 currency,
                 // connector: connector_val.into(),
                 // auth_creds: Some(auth_creds),
+                connector_customer: Some("cus_1234".to_string()),
+                return_url: Some("www.google.com".to_string()),
                 payment_method: payments::PaymentMethod::Card as i32,
                 payment_method_data: Some(payments::PaymentMethodData {
                     data: Some(payments::payment_method_data::Data::Card(payments::Card {
@@ -434,28 +463,53 @@ async fn handle_call_async(args: &[String], ctx: &mut ShellContext) -> Result<St
                 address: Some(payments::PaymentAddress::default()),
                 auth_type: payments::AuthenticationType::NoThreeDs as i32,
                 minor_amount: amount,
+                request_incremental_authorization: false,
                 connector_request_reference_id: format!(
                     "shell-ref-{}",
                     chrono::Utc::now().timestamp_millis()
                 ),
+                browser_info: Some(payments::BrowserInformation {
+                    user_agent: Some("Mozilla/5.0".to_string()),
+                    accept_header: Some("*/*".to_string()),
+                    language: Some("en-US".to_string()),
+                    color_depth: Some(24),
+                    screen_height: Some(1080),
+                    screen_width: Some(1920),
+                    java_enabled: Some(false),
+                    java_script_enabled: None,
+                    time_zone: None,
+                    ip_address: None,
+                    os_type: None,
+                    os_version: None,
+                    device_model: None,
+                    accept_language: None,
+                }),
                 ..Default::default()
             };
 
             // println!("Sending Authorize request: {:#?}", request);
             // Call the method on the mutable client reference
-            let response = client
-                .payment_authorize(request)
-                .await;
+            let mut request = tonic::Request::new(request);
+            request
+                .metadata_mut()
+                .append("x-connector", "adyen".parse().unwrap());
+            request.metadata_mut().append(
+                "x-auth",
+                MetadataValue::from_str(&state.auth_details.clone().unwrap())?,
+            );
+            request.metadata_mut().append(
+                "x-api-key",
+                MetadataValue::from_str(&state.api_key.clone().unwrap())?,
+            );
+            request.metadata_mut().append(
+                "x-key1",
+                MetadataValue::from_str(&state.key1.clone().unwrap())?,
+            );
+            let response = client.payment_authorize(request).await;
 
             match response {
-                Ok(response) => {
-                    Ok(format!("{:#?}", response.into_inner()))
-                },
-                Err(err) => {
-                    Ok(
-                        format!("Error during authorize call: {:#?}", err)
-                    )
-                },
+                Ok(response) => Ok(format!("{:#?}", response.into_inner())),
+                Err(err) => Ok(format!("Error during authorize call: {:#?}", err)),
             }
             // Use Debug formatting for potentially multi-line responses
         }
@@ -476,6 +530,22 @@ async fn handle_call_async(args: &[String], ctx: &mut ShellContext) -> Result<St
 
             // println!("Sending Sync request: {:#?}", request);
             // Call the method on the mutable client reference
+            let mut request = tonic::Request::new(request);
+            request
+                .metadata_mut()
+                .append("x-connector", "razorpay".parse().unwrap());
+            request.metadata_mut().append(
+                "x-auth",
+                MetadataValue::from_str(&state.auth_details.clone().unwrap())?,
+            );
+            request.metadata_mut().append(
+                "x-api-key",
+                MetadataValue::from_str(&state.api_key.clone().unwrap())?,
+            );
+            request.metadata_mut().append(
+                "x-key1",
+                MetadataValue::from_str(&state.key1.clone().unwrap())?,
+            );
             let response = client
                 .payment_sync(request)
                 .await
