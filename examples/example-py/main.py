@@ -10,34 +10,36 @@ from payment_pb2 import (
     Card,
     PaymentMethodData,
     PaymentAddress,
-    AuthType,
-    BodyKey,
     AuthenticationType,
     PaymentsAuthorizeResponse,
     PaymentsSyncResponse,
     Currency,
-    Connector,
     PaymentMethod,
     BrowserInformation,
 )
 from payment_pb2_grpc import PaymentServiceStub
 from typing import Union
 
-
 def get_env_variable(var_name: str, default: str) -> str:
     """Fetch an environment variable or return a default value."""
     return os.getenv(var_name, default)
 
+# Retrieve credentials from environment variables
+api_key = get_env_variable("API_KEY", "default_api_key")
+key1 = get_env_variable("KEY1", "default_key1")
+
+metadata = [
+    ('x-auth','body-key'),
+    ('x-connector', 'razorpay'),
+    ('x-api-key', api_key),
+    ('x-key1',key1)
+]
 
 def make_payment_authorization_request(url: str) -> Union[PaymentsAuthorizeResponse, None]:
     """Send a payment authorization request."""
     try:
         channel = grpc.insecure_channel(url)
         client = PaymentServiceStub(channel)
-
-        # Retrieve credentials from environment variables
-        api_key = get_env_variable("API_KEY", "default_api_key")
-        key1 = get_env_variable("KEY1", "default_key1")
 
         # Create request with updated values
         request = PaymentsAuthorizeRequest(
@@ -72,10 +74,12 @@ def make_payment_authorization_request(url: str) -> Union[PaymentsAuthorizeRespo
                 screen_width=1920,
                 java_enabled=False,
             ),
+            connector_customer="cus_131",
+            return_url="www.google.com"
         )
 
         # TODO set connector and auth in headers
-        return client.PaymentAuthorize(request)
+        return client.PaymentAuthorize(request,metadata=metadata)
     except grpc.RpcError as e:
         print(f"RPC error: {e.code()}: {e.details()}", file=sys.stderr)
     except Exception as e:
@@ -90,10 +94,6 @@ def make_payment_sync_request(url: str) -> Union[PaymentsSyncResponse, None]:
     try:
         channel = grpc.insecure_channel(url)
         client = PaymentServiceStub(channel)
-
-        # Retrieve credentials from environment variables
-        api_key = get_env_variable("API_KEY", "default_api_key")
-        key1 = get_env_variable("KEY1", "default_key1")
         resource_id = get_env_variable("RESOURCE_ID", "pay_QHj9Thiy5mCC4Y")
 
         # Create the request
@@ -107,7 +107,7 @@ def make_payment_sync_request(url: str) -> Union[PaymentsSyncResponse, None]:
         )
 
         # TODO set connector and auth in headers
-        return client.PaymentSync(request)
+        return client.PaymentSync(request,metadata=metadata)
     except grpc.RpcError as e:
         print(f"RPC error: {e.code()}: {e.details()}", file=sys.stderr)
     except Exception as e:
