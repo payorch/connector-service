@@ -43,10 +43,10 @@ def make_payment_authorization_request(url: str) -> Union[PaymentsAuthorizeRespo
         request = PaymentsAuthorizeRequest(
             amount=1000,
             currency=Currency.USD,
-            connector=Connector.RAZORPAY,
-            auth_creds=AuthType(
-                body_key=BodyKey(api_key=api_key, key1=key1)
-            ),
+            # connector=Connector.RAZORPAY,
+            # auth_creds=AuthType(
+            #     body_key=BodyKey(api_key=api_key, key1=key1)
+            # ),
             payment_method=PaymentMethod.CARD,
             payment_method_data=PaymentMethodData(
                 card=Card(
@@ -74,6 +74,7 @@ def make_payment_authorization_request(url: str) -> Union[PaymentsAuthorizeRespo
             ),
         )
 
+        # TODO set connector and auth in headers
         return client.PaymentAuthorize(request)
     except grpc.RpcError as e:
         print(f"RPC error: {e.code()}: {e.details()}", file=sys.stderr)
@@ -97,14 +98,15 @@ def make_payment_sync_request(url: str) -> Union[PaymentsSyncResponse, None]:
 
         # Create the request
         request = PaymentsSyncRequest(
-            connector=Connector.RAZORPAY,
-            auth_creds=AuthType(
-                body_key=BodyKey(api_key=api_key, key1=key1)
-            ),
+            # connector=Connector.RAZORPAY,
+            # auth_creds=AuthType(
+            #     body_key=BodyKey(api_key=api_key, key1=key1)
+            # ),
             resource_id=resource_id,
             connector_request_reference_id="conn_req_abc",
         )
 
+        # TODO set connector and auth in headers
         return client.PaymentSync(request)
     except grpc.RpcError as e:
         print(f"RPC error: {e.code()}: {e.details()}", file=sys.stderr)

@@ -5,12 +5,12 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] } # Async runtime
-tonic = "0.12.2"
-prost = "0.12"                               # Protobuf implementation (dependency of tonic)
+tonic = "0.13.0"
+prost = "0.13.5"                               # Protobuf implementation (dependency of tonic)
 anyhow = "1.0"                               # Flexible error handling
 shelgon = "0.2"                              # REPL library
-strum = { version = "0.26", features = ["derive"] } # Enum string parsing
-strum_macros = "0.26"
+strum = { version = "0.27.1", features = ["derive"] } # Enum string parsing
+strum_macros = "0.27.1"
 chrono = "0.4"                               # Timestamps (optional)
 
 # --- Add your gRPC types crate here ---

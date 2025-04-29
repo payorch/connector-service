@@ -6,4 +6,4 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1.44.2", features = ["full"] }
 grpc-api-types = { path = "../../backend/grpc-api-types" }
-tonic = "0.12.2"
+tonic = "0.13.0"

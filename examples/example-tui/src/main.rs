@@ -54,42 +54,42 @@ enum AuthDetailsChoice {
     // e.g., NoKey,
 }
 
-impl From<AuthDetailsChoice> for payments::AuthType {
-    fn from(choice: AuthDetailsChoice) -> Self {
-        match choice {
-            AuthDetailsChoice::BodyKey { api_key, key1 } => payments::AuthType {
-                auth_details: Some(payments::auth_type::AuthDetails::BodyKey(
-                    payments::BodyKey { api_key, key1 },
-                )),
-            },
-            // Updated HeaderKey mapping
-            AuthDetailsChoice::HeaderKey { api_key } => payments::AuthType {
-                // <-- Removed key1
-                auth_details: Some(payments::auth_type::AuthDetails::HeaderKey(
-                    // Construct HeaderKey correctly using crate type
-                    payments::HeaderKey { api_key }, // <-- Removed key1
-                )),
-            },
-            AuthDetailsChoice::SignatureKey {
-                api_key,
-                key1,
-                api_secret,
-            } => payments::AuthType {
-                auth_details: Some(payments::auth_type::AuthDetails::SignatureKey(
-                    payments::SignatureKey {
-                        api_key,
-                        key1,
-                        api_secret,
-                    },
-                )),
-            },
-            // Add mappings for other AuthDetailsChoice variants if added
-            // e.g., AuthDetailsChoice::NoKey => payments::AuthType {
-            //     auth_details: Some(payments::auth_type::AuthDetails::NoKey(true)),
-            // },
-        }
-    }
-}
+// impl From<AuthDetailsChoice> for payments::AuthType {
+//     fn from(choice: AuthDetailsChoice) -> Self {
+//         match choice {
+//             AuthDetailsChoice::BodyKey { api_key, key1 } => payments::AuthType {
+//                 auth_details: Some(payments::auth_type::AuthDetails::BodyKey(
+//                     payments::BodyKey { api_key, key1 },
+//                 )),
+//             },
+//             // Updated HeaderKey mapping
+//             AuthDetailsChoice::HeaderKey { api_key } => payments::AuthType {
+//                 // <-- Removed key1
+//                 auth_details: Some(payments::auth_type::AuthDetails::HeaderKey(
+//                     // Construct HeaderKey correctly using crate type
+//                     payments::HeaderKey { api_key }, // <-- Removed key1
+//                 )),
+//             },
+//             AuthDetailsChoice::SignatureKey {
+//                 api_key,
+//                 key1,
+//                 api_secret,
+//             } => payments::AuthType {
+//                 auth_details: Some(payments::auth_type::AuthDetails::SignatureKey(
+//                     payments::SignatureKey {
+//                         api_key,
+//                         key1,
+//                         api_secret,
+//                     },
+//                 )),
+//             },
+//             // Add mappings for other AuthDetailsChoice variants if added
+//             // e.g., AuthDetailsChoice::NoKey => payments::AuthType {
+//             //     auth_details: Some(payments::auth_type::AuthDetails::NoKey(true)),
+//             // },
+//         }
+//     }
+// }
 
 // --- Application State ---
 #[derive(Debug, Default, Clone)]
@@ -418,8 +418,8 @@ async fn handle_call_async(args: &[String], ctx: &mut ShellContext) -> Result<St
             let request = payments::PaymentsAuthorizeRequest {
                 amount,
                 currency,
-                connector: connector_val.into(),
-                auth_creds: Some(auth_creds),
+                // connector: connector_val.into(),
+                // auth_creds: Some(auth_creds),
                 payment_method: payments::PaymentMethod::Card as i32,
                 payment_method_data: Some(payments::PaymentMethodData {
                     data: Some(payments::payment_method_data::Data::Card(payments::Card {
@@ -465,8 +465,8 @@ async fn handle_call_async(args: &[String], ctx: &mut ShellContext) -> Result<St
                 .as_ref()
                 .ok_or_else(|| anyhow!("Resource ID is not set."))?;
             let request = payments::PaymentsSyncRequest {
-                connector: connector_val.into(),
-                auth_creds: Some(auth_creds),
+                // connector: connector_val.into(),
+                // auth_creds: Some(auth_creds),
                 resource_id: resource_id.clone(),
                 connector_request_reference_id: Some(format!(
                     "shell-sync-ref-{}",

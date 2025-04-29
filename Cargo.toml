@@ -7,9 +7,9 @@ members = [
   "backend/grpc-server"
 ]
 exclude = [
-  "client-sdk/example-rs",
-  "client-sdk/example-tui",
-  "client-sdk/example-cli"
+  "examples/example-rs",
+  "examples/example-tui",
+  "examples/example-cli"
 ]
 
 

@@ -9,12 +9,24 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use strum::{EnumString, EnumVariantNames}; // For parsing enums
 use tonic::transport::{Channel, Endpoint}; // For client connection
+use tonic::metadata::MetadataMap;
+use tonic::Extensions;
+use tonic::Request;
+use tonic::transport::Channel as TonicChannel;
 
 // --- Use gRPC types from the crate ---
 use grpc_api_types::payments;
+use grpc_api_types::payments::payment_service_client::PaymentServiceClient;
 
 // --- Type Aliases ---
-type PaymentClient = payments::payment_service_client::PaymentServiceClient<Channel>;
+type PaymentClient = PaymentServiceClient<TonicChannel>;
+
+// --- Constants ---
+const X_CONNECTOR: &str = "x-connector";
+const X_AUTH: &str = "x-auth";
+const X_API_KEY: &str = "x-api-key";
+const X_KEY1: &str = "x-key1";
+const X_API_SECRET: &str = "x-api-secret";
 
 // --- Enums ---
 #[derive(
@@ -35,11 +47,11 @@ enum ConnectorChoice {
     Razorpay,
 }
 
-impl From<ConnectorChoice> for i32 {
-    fn from(choice: ConnectorChoice) -> Self {
-        match choice {
-            ConnectorChoice::Adyen => payments::Connector::Adyen as i32,
-            ConnectorChoice::Razorpay => payments::Connector::Razorpay as i32,
+impl std::fmt::Display for ConnectorChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectorChoice::Adyen => write!(f, "adyen"),
+            ConnectorChoice::Razorpay => write!(f, "razorpay"),
         }
     }
 }
@@ -174,6 +186,62 @@ struct PayArgs {
     #[arg(long)]
     payment_file: Option<PathBuf>,
 
+    /// Capture method (automatic, manual, manual_multiple, scheduled, sequential_automatic)
+    #[arg(long)]
+    capture_method: Option<String>,
+
+    /// Return URL for redirect flows
+    #[arg(long)]
+    return_url: Option<String>,
+
+    /// Webhook URL for notifications
+    #[arg(long)]
+    webhook_url: Option<String>,
+
+    /// Complete authorize URL
+    #[arg(long)]
+    complete_authorize_url: Option<String>,
+
+    /// Future usage (off_session, on_session)
+    #[arg(long)]
+    future_usage: Option<String>,
+
+    /// Whether the payment is off session
+    #[arg(long)]
+    off_session: Option<bool>,
+
+    /// Order category
+    #[arg(long)]
+    order_category: Option<String>,
+
+    /// Whether enrolled for 3DS
+    #[arg(long)]
+    enrolled_for_3ds: Option<bool>,
+
+    /// Payment experience (redirect_to_url, invoke_sdk_client, etc.)
+    #[arg(long)]
+    payment_experience: Option<String>,
+
+    /// Payment method type
+    #[arg(long)]
+    payment_method_type: Option<String>,
+
+    /// Whether to request incremental authorization
+    #[arg(long)]
+    request_incremental_authorization: Option<bool>,
+
+    /// Whether to request extended authorization
+    #[arg(long)]
+    request_extended_authorization: Option<bool>,
+
+    /// Merchant order reference ID
+    #[arg(long)]
+    merchant_order_reference_id: Option<String>,
+
+    /// Shipping cost
+    #[arg(long)]
+    shipping_cost: Option<i64>,
+
     #[command(flatten)]
     auth: Option<AuthDetails>,
 
@@ -254,7 +322,7 @@ async fn connect_client(url: &str) -> Result<PaymentClient> {
 }
 
 // --- Get Auth Details ---
-fn get_auth_details(auth: &AuthDetails) -> Result<payments::AuthType> {
+fn get_auth_details(auth: &AuthDetails) -> Result<Vec<(String, String)>> {
     match auth.auth_type {
         AuthType::BodyKey => {
             let key1 = auth
@@ -477,13 +545,71 @@ async fn handle_pay(mut args: PayArgs) -> Result<()> {
 
     // Connect to the server
     let mut client = connect_client(&args.url).await?;
-    let auth_creds = get_auth_details(&auth_details)?;
+
+    // Create metadata with auth details
+    let mut metadata = MetadataMap::new();
+    
+    // Add connector
+    metadata.insert(
+        X_CONNECTOR,
+        connector.to_string().parse().unwrap(),
+    );
+
+    // Add auth details based on auth type
+    match auth_details.auth_type {
+        AuthType::HeaderKey => {
+            metadata.insert(
+                X_AUTH,
+                "header-key".parse().unwrap(),
+            );
+            metadata.insert(
+                X_API_KEY,
+                auth_details.api_key.parse().unwrap(),
+            );
+        }
+        AuthType::BodyKey => {
+            metadata.insert(
+                X_AUTH,
+                "body-key".parse().unwrap(),
+            );
+            metadata.insert(
+                X_API_KEY,
+                auth_details.api_key.parse().unwrap(),
+            );
+            if let Some(key1) = auth_details.key1 {
+                metadata.insert(
+                    X_KEY1,
+                    key1.parse().unwrap(),
+                );
+            }
+        }
+        AuthType::SignatureKey => {
+            metadata.insert(
+                X_AUTH,
+                "signature-key".parse().unwrap(),
+            );
+            metadata.insert(
+                X_API_KEY,
+                auth_details.api_key.parse().unwrap(),
+            );
+            if let Some(key1) = auth_details.key1 {
+                metadata.insert(
+                    X_KEY1,
+                    key1.parse().unwrap(),
+                );
+            }
+            if let Some(api_secret) = auth_details.api_secret {
+                metadata.insert(
+                    X_API_SECRET,
+                    api_secret.parse().unwrap(),
+                );
+            }
+        }
+    }
 
     let request = payments::PaymentsAuthorizeRequest {
         amount,
         currency,
-        connector: connector.into(),
-        auth_creds: Some(auth_creds),
         payment_method: payments::PaymentMethod::Card as i32,
         payment_method_data: Some(payments::PaymentMethodData {
             data: Some(payments::payment_method_data::Data::Card(payments::Card {
@@ -502,10 +628,58 @@ async fn handle_pay(mut args: PayArgs) -> Result<()> {
             "cli-ref-{}",
             chrono::Utc::now().timestamp_millis()
         ),
+        capture_method: args.capture_method.map(|cm| {
+            match cm.to_lowercase().as_str() {
+                "automatic" => payments::CaptureMethod::Automatic as i32,
+                "manual" => payments::CaptureMethod::Manual as i32,
+                "manual_multiple" => payments::CaptureMethod::ManualMultiple as i32,
+                "scheduled" => payments::CaptureMethod::Scheduled as i32,
+                "sequential_automatic" => payments::CaptureMethod::SequentialAutomatic as i32,
+                _ => payments::CaptureMethod::Automatic as i32,
+            }
+        }),
+        return_url: args.return_url,
+        webhook_url: args.webhook_url,
+        complete_authorize_url: args.complete_authorize_url,
+        off_session: args.off_session,
+        order_category: args.order_category,
+        enrolled_for_3ds: args.enrolled_for_3ds.unwrap_or(false),
+        payment_experience: args.payment_experience.map(|pe| {
+            match pe.to_lowercase().as_str() {
+                "redirect_to_url" => payments::PaymentExperience::RedirectToUrl as i32,
+                "invoke_sdk_client" => payments::PaymentExperience::InvokeSdkClient as i32,
+                "display_qr_code" => payments::PaymentExperience::DisplayQrCode as i32,
+                "one_click" => payments::PaymentExperience::OneClick as i32,
+                "link_wallet" => payments::PaymentExperience::LinkWallet as i32,
+                "invoke_payment_app" => payments::PaymentExperience::InvokePaymentApp as i32,
+                "display_wait_screen" => payments::PaymentExperience::DisplayWaitScreen as i32,
+                "collect_otp" => payments::PaymentExperience::CollectOtp as i32,
+                _ => payments::PaymentExperience::RedirectToUrl as i32,
+            }
+        }),
+        payment_method_type: args.payment_method_type.map(|pmt| {
+            match pmt.to_lowercase().as_str() {
+                "card" => payments::PaymentMethodType::Credit as i32,
+                "credit" => payments::PaymentMethodType::Credit as i32,
+                "debit" => payments::PaymentMethodType::Debit as i32,
+                _ => payments::PaymentMethodType::Credit as i32,
+            }
+        }),
+        request_incremental_authorization: args.request_incremental_authorization.unwrap_or(false),
+        request_extended_authorization: args.request_extended_authorization.unwrap_or(false),
+        merchant_order_reference_id: args.merchant_order_reference_id,
+        shipping_cost: args.shipping_cost,
+        setup_future_usage: args.future_usage.map(|fu| {
+            match fu.to_lowercase().as_str() {
+                "off_session" => payments::FutureUsage::OffSession as i32,
+                "on_session" => payments::FutureUsage::OnSession as i32,
+                _ => payments::FutureUsage::OffSession as i32,
+            }
+        }),
         ..Default::default()
     };
 
-    let response = client.payment_authorize(request).await;
+    let response = client.payment_authorize(Request::from_parts(metadata, Extensions::default(), request)).await;
 
     match response {
         Ok(response) => {
@@ -582,11 +756,69 @@ async fn handle_get(mut args: GetArgs) -> Result<()> {
 
     // Connect to the server
     let mut client = connect_client(&args.url).await?;
-    let auth_creds = get_auth_details(&auth_details)?;
+
+    // Create metadata with auth details
+    let mut metadata = MetadataMap::new();
+    
+    // Add connector
+    metadata.insert(
+        X_CONNECTOR,
+        connector.to_string().parse().unwrap(),
+    );
+
+    // Add auth details based on auth type
+    match auth_details.auth_type {
+        AuthType::HeaderKey => {
+            metadata.insert(
+                X_AUTH,
+                "header-key".parse().unwrap(),
+            );
+            metadata.insert(
+                X_API_KEY,
+                auth_details.api_key.parse().unwrap(),
+            );
+        }
+        AuthType::BodyKey => {
+            metadata.insert(
+                X_AUTH,
+                "body-key".parse().unwrap(),
+            );
+            metadata.insert(
+                X_API_KEY,
+                auth_details.api_key.parse().unwrap(),
+            );
+            if let Some(key1) = auth_details.key1 {
+                metadata.insert(
+                    X_KEY1,
+                    key1.parse().unwrap(),
+                );
+            }
+        }
+        AuthType::SignatureKey => {
+            metadata.insert(
+                X_AUTH,
+                "signature-key".parse().unwrap(),
+            );
+            metadata.insert(
+                X_API_KEY,
+                auth_details.api_key.parse().unwrap(),
+            );
+            if let Some(key1) = auth_details.key1 {
+                metadata.insert(
+                    X_KEY1,
+                    key1.parse().unwrap(),
+                );
+            }
+            if let Some(api_secret) = auth_details.api_secret {
+                metadata.insert(
+                    X_API_SECRET,
+                    api_secret.parse().unwrap(),
+                );
+            }
+        }
+    }
 
     let request = payments::PaymentsSyncRequest {
-        connector: connector.into(),
-        auth_creds: Some(auth_creds),
         resource_id: payment_id.to_string(),
         connector_request_reference_id: Some(format!(
             "cli-sync-ref-{}",
@@ -594,7 +826,7 @@ async fn handle_get(mut args: GetArgs) -> Result<()> {
         )),
     };
 
-    let response = client.payment_sync(request).await;
+    let response = client.payment_sync(Request::from_parts(metadata, Extensions::default(), request)).await;
 
     match response {
         Ok(response) => {

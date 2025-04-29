@@ -20,8 +20,8 @@ const PROTO_PATH = path.join(PROTO_DIR, 'payment.proto');
 interface PaymentRequest {
   amount: number;
   currency: string;
-  connector: string;
-  auth_creds: Record<string, unknown>;
+  // connector: string;
+  // auth_creds: Record<string, unknown>;
   payment_method: string;
   payment_method_data: Record<string, unknown>;
   address: Record<string, unknown>;
@@ -64,8 +64,8 @@ async function main() {
     const request: PaymentRequest = {
       amount: 1000,
       currency: 'USD',
-      connector: 'ADYEN',
-      auth_creds: { signature_key: { api_key: '', key1: '', api_secret: '' } },
+      // connector: 'ADYEN', // TODO: move to headers
+      // auth_creds: { signature_key: { api_key: '', key1: '', api_secret: '' } }, // TODO: move to headers
       payment_method: 'CARD',
       payment_method_data: { card: { card_number: '4111111111111111', card_exp_month: '03', card_exp_year: '2030', card_cvc: '737' } },
       address: {},
