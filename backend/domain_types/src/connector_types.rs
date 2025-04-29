@@ -12,7 +12,9 @@ use hyperswitch_interfaces::{
 };
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+// snake case for enum variants
+#[derive(Clone, Debug, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum ConnectorEnum {
     Adyen,
     Razorpay,

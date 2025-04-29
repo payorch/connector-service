@@ -14,7 +14,6 @@ service PaymentService {
 message PaymentsAuthorizeRequest {
   int64 amount = 10;
   Currency currency = 15;
-  Connector connector = 35;
   AuthType auth_creds = 34;
   PaymentMethod payment_method = 2;
   PaymentMethodData payment_method_data = 14;
@@ -62,7 +61,6 @@ message PaymentsAuthorizeResponse {
 }
 
 message PaymentsSyncRequest {
-  Connector connector = 35;
   AuthType auth_creds = 34;
   string resource_id = 1;
   optional string connector_request_reference_id = 2;
@@ -79,7 +77,6 @@ message PaymentsSyncResponse {
 }
 
 message RefundsSyncRequest {
-  Connector connector = 35;
   AuthType auth_creds = 34;
   string connector_refund_id = 2;
   string connector_transaction_id = 1;
@@ -95,7 +92,6 @@ message RefundsSyncResponse {
 }
 
 message IncomingWebhookRequest {
-  Connector connector = 1;
   RequestDetails request_details = 2;
   optional ConnectorWebhookSecrets webhook_secrets = 3;
   optional AuthType auth_creds = 34;
@@ -134,7 +130,6 @@ message ConnectorWebhookSecrets {
 
 message RefundsRequest {
   string refund_id = 1;
-  Connector connector = 35;
   AuthType auth_creds = 34;
   string connector_transaction_id = 2;
   optional string connector_refund_id = 3;
@@ -1031,7 +1026,6 @@ message MultipleCaptureRequestData {
 
 message PaymentsCaptureRequest {
   string connector_transaction_id = 1;
-  Connector connector = 35;
   AuthType auth_creds = 34;
   int64 amount_to_capture = 2;
   Currency currency = 15;

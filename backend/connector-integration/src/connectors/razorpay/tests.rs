@@ -2,8 +2,8 @@
 mod tests {
 
     use domain_types::connector_types::{
-            BoxedConnector, ConnectorServiceTrait, PaymentFlowData, PaymentsAuthorizeData,
-        };
+        BoxedConnector, ConnectorServiceTrait, PaymentFlowData, PaymentsAuthorizeData,
+    };
     use hyperswitch_cards::CardNumber;
     use hyperswitch_common_enums::{AttemptStatus, AuthenticationType, PaymentMethod};
     use hyperswitch_domain_models::{
@@ -177,7 +177,7 @@ mod tests {
             let connector: BoxedConnector = Box::new(Razorpay::new());
             let result = connector.get_request_body(&test_router_data);
             let request_content = result.unwrap();
-           
+
             let actual_json: Value = match request_content {
                 Some(RequestContent::Json(payload)) => {
                     to_value(&payload).expect("Failed to serialize payload to JSON")
@@ -431,9 +431,7 @@ mod tests {
 
         #[test]
         fn test_handle_response_v2_valid_authorize_response() {
-            use domain_types::connector_types::{
-                BoxedConnector, PaymentFlowData,
-            };
+            use domain_types::connector_types::{BoxedConnector, PaymentFlowData};
             use domain_types::types::{ConnectorParams, Connectors};
             use hyperswitch_api_models::payments::{Address, PhoneDetails};
             use hyperswitch_common_enums::Currency;
@@ -679,7 +677,6 @@ mod tests {
                 "Expected panic due to missing required fields",
             );
         }
-    
     }
 
     #[test]
@@ -1056,7 +1053,6 @@ mod tests {
             };
             use serde_json::{to_value, Value};
 
-            
             use domain_types::connector_types::{BoxedConnector, PaymentCreateOrderData};
 
             let email = Email::try_from("testuser@gmail.com".to_string()).unwrap();
@@ -1148,8 +1144,6 @@ mod tests {
             );
             let receipt_str = receipt_value.as_str().unwrap();
             assert!(!receipt_str.is_empty(), "Expected non-empty receipt string");
-
-          
         }
 
         #[test]
@@ -1241,13 +1235,14 @@ mod tests {
             );
             let receipt_str = receipt_value.as_str().unwrap();
             assert!(!receipt_str.is_empty(), "Expected non-empty receipt string");
-
         }
 
         #[test]
         fn test_build_request_invalid() {
             use crate::connectors::Razorpay;
-            use domain_types::connector_types::{BoxedConnector, PaymentFlowData, PaymentsAuthorizeData};
+            use domain_types::connector_types::{
+                BoxedConnector, PaymentFlowData, PaymentsAuthorizeData,
+            };
             use domain_types::types::{ConnectorParams, Connectors};
             use hyperswitch_common_enums::{
                 AttemptStatus, AuthenticationType, Currency, PaymentMethod, PaymentMethodType,
@@ -1259,7 +1254,7 @@ mod tests {
                 router_data::ErrorResponse,
                 router_data_v2::RouterDataV2,
             };
-        
+
             let test_router_data = RouterDataV2 {
                 flow: std::marker::PhantomData,
                 resource_common_data: PaymentFlowData {
@@ -1353,17 +1348,16 @@ mod tests {
                     connector_transaction_id: None,
                 }),
             };
-        
+
             let connector: BoxedConnector = Box::new(Razorpay::new());
             let result = connector.get_request_body(&test_router_data);
-        
+
             assert!(
                 result.is_err(),
                 "Expected error for invalid request data, but got: {:?}",
                 result
             );
         }
-        
     }
 
     #[test]
@@ -1450,7 +1444,6 @@ mod tests {
             }),
         };
 
-
         let http_response = Response {
             headers: None,
             response: br#"{
@@ -1480,7 +1473,6 @@ mod tests {
             result.response.unwrap().order_id,
             "order_QMrTOdLWvEHsXz".to_string()
         );
-
     }
 
     #[test]
@@ -1731,12 +1723,10 @@ mod tests {
             "connector_transaction_id": null
         });
         assert_eq!(actual_json, expected_json);
-       
     }
 
     #[test]
     fn test_handle_error_response_invalid_json() {
-     
         let http_response = Response {
             headers: None,
             response: br#"{ "error": { "code": "BAD_REQUEST_ERROR" "#.to_vec().into(),
@@ -1756,7 +1746,6 @@ mod tests {
     }
     #[test]
     fn test_handle_error_response_missing_error_field() {
-       
         let http_response = Response {
             headers: None,
             response: br#"{

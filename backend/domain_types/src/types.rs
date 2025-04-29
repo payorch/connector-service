@@ -4,15 +4,15 @@ use std::{collections::HashMap, str::FromStr};
 use crate::connector_flow::{Authorize, Capture, PSync, RSync, Refund};
 use crate::connector_types::{
     MultipleCaptureRequestData, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData,
-    PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundWebhookDetailsResponse, RefundsData,
-    RefundsResponseData, WebhookDetailsResponse,
+    PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
+    RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsCaptureResponse,
-    RefundsSyncResponse, PaymentsSyncResponse, RefundsResponse
+    PaymentsSyncResponse, RefundsResponse, RefundsSyncResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
@@ -1436,9 +1436,9 @@ pub fn generate_payment_capture_response(
                 resource_id,
                 redirection_data: _,
                 connector_metadata: _,
-                network_txn_id:_,
+                network_txn_id: _,
                 connector_response_reference_id,
-                incremental_authorization_allowed:_,
+                incremental_authorization_allowed: _,
             } => {
                 let status = router_data_v2.resource_common_data.status;
                 let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
@@ -1481,4 +1481,3 @@ pub fn generate_payment_capture_response(
         }
     }
 }
-

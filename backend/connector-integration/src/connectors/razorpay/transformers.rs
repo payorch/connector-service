@@ -13,7 +13,7 @@ use domain_types::{
     connector_flow::{Authorize, CreateOrder, RSync, Refund},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
-        PaymentsResponseData, RefundsData, RefundFlowData, RefundSyncData, RefundsResponseData,
+        PaymentsResponseData, RefundFlowData, RefundSyncData, RefundsData, RefundsResponseData,
     },
 };
 use hyperswitch_domain_models::{
@@ -487,16 +487,25 @@ impl ForeignTryFrom<RazorpayRefundStatus> for hyperswitch_common_enums::RefundSt
     fn foreign_try_from(item: RazorpayRefundStatus) -> Result<Self, Self::Error> {
         match item {
             RazorpayRefundStatus::Failed => Ok(Self::Failure),
-            RazorpayRefundStatus::Pending |
-            RazorpayRefundStatus::Created => Ok(Self::Pending),
+            RazorpayRefundStatus::Pending | RazorpayRefundStatus::Created => Ok(Self::Pending),
             RazorpayRefundStatus::Processed => Ok(Self::Success),
         }
     }
 }
 
-impl TryFrom<&RazorpayRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>> for RazorpayRefundRequest {
+impl
+    TryFrom<
+        &RazorpayRouterData<
+            &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+        >,
+    > for RazorpayRefundRequest
+{
     type Error = Error;
-    fn try_from(item: &RazorpayRouterData<&RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>>) -> Result<Self, Self::Error> {
+    fn try_from(
+        item: &RazorpayRouterData<
+            &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
+        >,
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             amount: item.amount,
         })
@@ -751,7 +760,6 @@ impl<F, Req>
         }
     }
 }
-
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1031,7 +1039,7 @@ pub(crate) fn get_razorpay_payment_webhook_status(
             RazorpayPaymentStatus::Captured => Ok(AttemptStatus::Charged),
             RazorpayPaymentStatus::Failed => Ok(AttemptStatus::AuthorizationFailed),
         },
-        RazorpayEntity::Refund => Err(errors::ConnectorError::RequestEncodingFailed)
+        RazorpayEntity::Refund => Err(errors::ConnectorError::RequestEncodingFailed),
     }
 }
 
@@ -1042,10 +1050,11 @@ pub(crate) fn get_razorpay_refund_webhook_status(
     match entity {
         RazorpayEntity::Refund => match status {
             RazorpayRefundStatus::Processed => Ok(RefundStatus::Success),
-            RazorpayRefundStatus::Created |
-            RazorpayRefundStatus::Pending => Ok(RefundStatus::Pending),
+            RazorpayRefundStatus::Created | RazorpayRefundStatus::Pending => {
+                Ok(RefundStatus::Pending)
+            }
             RazorpayRefundStatus::Failed => Ok(RefundStatus::Failure),
         },
-        RazorpayEntity::Payment => Err(errors::ConnectorError::RequestEncodingFailed)
+        RazorpayEntity::Payment => Err(errors::ConnectorError::RequestEncodingFailed),
     }
 }

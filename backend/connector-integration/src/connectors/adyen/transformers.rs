@@ -3,8 +3,8 @@ use domain_types::{
         Capture, {Authorize, Refund},
     },
     connector_types::{
-        EventType, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData, PaymentsResponseData, RefundFlowData, RefundsData,
-        RefundsResponseData,
+        EventType, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData,
+        PaymentsResponseData, RefundFlowData, RefundsData, RefundsResponseData,
     },
 };
 use error_stack::ResultExt;
@@ -1638,4 +1638,3 @@ impl<F, Req>
         })
     }
 }
-

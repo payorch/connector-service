@@ -1,4 +1,4 @@
-use crate::configs::Config;
+use crate::{configs::Config, utils::connector_from_metadata};
 use connector_integration::types::ConnectorData;
 use domain_types::{
     connector_flow::{Authorize, Capture, CreateOrder, PSync, RSync, Refund},
@@ -117,20 +117,8 @@ impl PaymentService for Payments {
     ) -> Result<tonic::Response<PaymentsAuthorizeResponse>, tonic::Status> {
         info!("PAYMENT_AUTHORIZE_FLOW: initiated");
 
+        let connector = connector_from_metadata(request.metadata())?;
         let payload = request.into_inner();
-
-        // Convert connector enum from the request
-        let connector =
-            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-            {
-                Ok(connector) => connector,
-                Err(e) => {
-                    return Err(tonic::Status::invalid_argument(format!(
-                        "Invalid connector: {}",
-                        e
-                    )))
-                }
-            };
 
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -256,20 +244,8 @@ impl PaymentService for Payments {
     ) -> Result<tonic::Response<PaymentsSyncResponse>, tonic::Status> {
         info!("PAYMENT_SYNC_FLOW: initiated");
 
+        let connector = connector_from_metadata(request.metadata())?;
         let payload = request.into_inner();
-
-        // Convert connector enum from the request
-        let connector =
-            match domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-            {
-                Ok(connector) => connector,
-                Err(e) => {
-                    return Err(tonic::Status::invalid_argument(format!(
-                        "Invalid connector: {}",
-                        e
-                    )))
-                }
-            };
 
         // Get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -376,13 +352,8 @@ impl PaymentService for Payments {
     ) -> Result<tonic::Response<RefundsSyncResponse>, tonic::Status> {
         info!("REFUND_SYNC_FLOW: initiated");
 
+        let connector = connector_from_metadata(request.metadata())?;
         let payload = request.into_inner();
-
-        let connector =
-            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-                .map_err(|e| {
-                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
-                })?;
 
         // Get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -452,6 +423,7 @@ impl PaymentService for Payments {
         &self,
         request: tonic::Request<IncomingWebhookRequest>,
     ) -> Result<tonic::Response<IncomingWebhookResponse>, tonic::Status> {
+        let connector = connector_from_metadata(request.metadata())?;
         let payload = request.into_inner();
 
         let request_details = payload
@@ -488,13 +460,6 @@ impl PaymentService for Payments {
                 })
             })
             .transpose()?;
-
-        // Convert connector enum from the request
-        let connector =
-            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-                .map_err(|e| {
-                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
-                })?;
 
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -569,13 +534,8 @@ impl PaymentService for Payments {
     ) -> Result<tonic::Response<RefundsResponse>, tonic::Status> {
         info!("REFUND_FLOW: initiated");
 
+        let connector = connector_from_metadata(request.metadata())?;
         let payload = request.into_inner();
-
-        let connector =
-            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-                .map_err(|e| {
-                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
-                })?;
 
         // Get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);
@@ -642,14 +602,8 @@ impl PaymentService for Payments {
     ) -> Result<tonic::Response<PaymentsCaptureResponse>, tonic::Status> {
         info!("PAYMENT_CAPTURE_FLOW: initiated");
 
+        let connector = connector_from_metadata(request.metadata())?;
         let payload = request.into_inner();
-
-        // Convert connector enum from the request
-        let connector =
-            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
-                .map_err(|e| {
-                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
-                })?;
 
         //get connector data
         let connector_data = ConnectorData::get_connector_by_name(&connector);

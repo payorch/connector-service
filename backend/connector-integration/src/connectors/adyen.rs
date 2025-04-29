@@ -1,5 +1,5 @@
-pub mod transformers;
 mod test;
+pub mod transformers;
 
 use hyperswitch_common_utils::{
     errors::CustomResult,
@@ -34,8 +34,8 @@ use domain_types::{
         PaymentCapture, PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData,
         PaymentOrderCreate, PaymentSyncV2, PaymentsAuthorizeData, PaymentsCaptureData,
         PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundSyncV2,
-        RefundV2, RefundsData, RefundWebhookDetailsResponse, RefundsResponseData, RequestDetails, ValidationTrait,
-        WebhookDetailsResponse,
+        RefundV2, RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, RequestDetails,
+        ValidationTrait, WebhookDetailsResponse,
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
@@ -401,14 +401,12 @@ impl ConnectorIntegrationV2<Capture, PaymentFlowData, PaymentsCaptureData, Payme
         errors::ConnectorError,
     > {
         let response: adyen::AdyenCaptureResponse = res
-        .response
-        .parse_struct("AdyenCaptureResponse")
-        .map_err(|err| {
-            report!(errors::ConnectorError::ResponseDeserializationFailed)
-                .attach_printable(format!(
-                    "Failed to parse AdyenCaptureResponse: {err:?}"
-                ))
-        })?;
+            .response
+            .parse_struct("AdyenCaptureResponse")
+            .map_err(|err| {
+                report!(errors::ConnectorError::ResponseDeserializationFailed)
+                    .attach_printable(format!("Failed to parse AdyenCaptureResponse: {err:?}"))
+            })?;
 
         with_response_body!(event_builder, response);
 
@@ -520,12 +518,7 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
         req: &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
     ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
     where
-        Self: ConnectorIntegrationV2<
-            Refund,
-            RefundFlowData,
-            RefundsData,
-            RefundsResponseData,
-        >,
+        Self: ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
     {
         let mut header = vec![(
             headers::CONTENT_TYPE.to_string(),
