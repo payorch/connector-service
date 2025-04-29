@@ -1,4 +1,4 @@
-use crate::connector_flow::{self, Authorize, Capture, PSync, RSync, Refund};
+use crate::connector_flow::{self, Authorize, Capture, PSync, RSync, Refund, Void};
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::Connectors;
 use crate::utils::ForeignTryFrom;
@@ -44,10 +44,16 @@ pub trait ConnectorServiceTrait:
     + PaymentAuthorizeV2
     + PaymentSyncV2
     + PaymentOrderCreate
-    + RefundSyncV2
+    + PaymentVoidV2
     + IncomingWebhook
     + RefundV2
     + PaymentCapture
+    + RefundSyncV2
+{
+}
+
+pub trait PaymentVoidV2:
+    ConnectorIntegrationV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>
 {
 }
 
@@ -119,6 +125,11 @@ pub struct PaymentFlowData {
     pub connector_http_status_code: Option<u16>,
     pub external_latency: Option<u128>,
     pub connectors: Connectors,
+}
+#[derive(Debug, Clone)]
+pub struct PaymentVoidData {
+    pub connector_transaction_id: String,
+    pub cancellation_reason: Option<String>,
 }
 
 #[derive(Debug, Clone)]

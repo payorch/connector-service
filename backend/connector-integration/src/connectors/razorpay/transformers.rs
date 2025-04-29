@@ -10,10 +10,11 @@ use hyperswitch_common_utils::{
 };
 
 use domain_types::{
-    connector_flow::{Authorize, CreateOrder, RSync, Refund},
+    connector_flow::{Authorize, Capture, CreateOrder, RSync, Refund},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
-        PaymentsResponseData, RefundFlowData, RefundSyncData, RefundsData, RefundsResponseData,
+        PaymentsCaptureData, PaymentsResponseData, RefundFlowData, RefundSyncData, RefundsData,
+        RefundsResponseData,
     },
 };
 use hyperswitch_domain_models::{
@@ -26,8 +27,6 @@ use hyperswitch_domain_models::{
 use hyperswitch_interfaces::errors;
 use hyperswitch_masking::Secret;
 use serde::{Deserialize, Serialize};
-
-type Error = error_stack::Report<hyperswitch_interfaces::errors::ConnectorError>;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum Currency {
@@ -500,7 +499,7 @@ impl
         >,
     > for RazorpayRefundRequest
 {
-    type Error = Error;
+    type Error = errors::ConnectorError;
     fn try_from(
         item: &RazorpayRouterData<
             &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
@@ -1056,5 +1055,105 @@ pub(crate) fn get_razorpay_refund_webhook_status(
             RazorpayRefundStatus::Failed => Ok(RefundStatus::Failure),
         },
         RazorpayEntity::Payment => Err(errors::ConnectorError::RequestEncodingFailed),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RazorpayCaptureRequest {
+    pub amount: MinorUnit,
+    pub currency: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RazorpayCaptureResponse {
+    pub id: String,
+    pub entity: RazorpayEntity,
+    pub amount: i64,
+    pub currency: String,
+    pub status: RazorpayPaymentStatus,
+    pub order_id: String,
+    pub invoice_id: Option<String>,
+    pub international: bool,
+    pub method: String,
+    pub amount_refunded: i64,
+    pub refund_status: Option<String>,
+    pub captured: bool,
+    pub description: Option<String>,
+    pub card_id: Option<String>,
+    pub bank: Option<String>,
+    pub wallet: Option<String>,
+    pub vpa: Option<String>,
+    pub email: Option<String>,
+    pub contact: Option<String>,
+    pub customer_id: Option<String>,
+    pub token_id: Option<String>,
+    pub notes: Vec<String>,
+    pub fee: Option<i64>,
+    pub tax: Option<i64>,
+    pub error_code: Option<String>,
+    pub error_description: Option<String>,
+    pub error_reason: Option<String>,
+    pub error_source: Option<String>,
+    pub error_step: Option<String>,
+    pub acquirer_data: Option<AcquirerData>,
+}
+
+impl
+    TryFrom<
+        &RazorpayRouterData<
+            &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+        >,
+    > for RazorpayCaptureRequest
+{
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+
+    fn try_from(
+        item: &RazorpayRouterData<
+            &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+        >,
+    ) -> Result<Self, Self::Error> {
+        let request_data = &item.router_data.request;
+
+        Ok(RazorpayCaptureRequest {
+            amount: item.amount,
+            currency: request_data.currency.to_string(),
+        })
+    }
+}
+
+impl<F, Req>
+    ForeignTryFrom<(
+        RazorpayCaptureResponse,
+        RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>,
+    )> for RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>
+{
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+    fn foreign_try_from(
+        (response, data): (
+            RazorpayCaptureResponse,
+            RouterDataV2<F, PaymentFlowData, Req, PaymentsResponseData>,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let status = match response.status {
+            RazorpayPaymentStatus::Captured => AttemptStatus::Charged,
+            RazorpayPaymentStatus::Authorized => AttemptStatus::Authorized,
+            RazorpayPaymentStatus::Failed => AttemptStatus::Failure,
+        };
+        Ok(Self {
+            response: Ok(PaymentsResponseData::TransactionResponse {
+                resource_id: ResponseId::ConnectorTransactionId(response.id),
+                redirection_data: Box::new(None),
+                connector_metadata: None,
+                network_txn_id: None,
+                connector_response_reference_id: Some(response.order_id),
+                incremental_authorization_allowed: None,
+            }),
+            resource_common_data: PaymentFlowData {
+                status,
+                ..data.resource_common_data
+            },
+            ..data
+        })
     }
 }

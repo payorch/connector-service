@@ -1,10 +1,10 @@
 use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
-use crate::connector_flow::{Authorize, Capture, PSync, RSync, Refund};
+use crate::connector_flow::{Authorize, Capture, PSync, RSync, Refund, Void};
 use crate::connector_types::{
-    MultipleCaptureRequestData, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData,
-    PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
+    MultipleCaptureRequestData, PaymentFlowData, PaymentVoidData, PaymentsAuthorizeData,
+    PaymentsCaptureData, PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
     RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, WebhookDetailsResponse,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
@@ -12,10 +12,12 @@ use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsCaptureResponse,
-    PaymentsSyncResponse, RefundsResponse, RefundsSyncResponse,
+    PaymentsSyncResponse, PaymentsVoidRequest, PaymentsVoidResponse, RefundsResponse,
+    RefundsSyncResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
+use hyperswitch_domain_models::payment_address::PaymentAddress;
 use hyperswitch_domain_models::{
     payment_method_data::PaymentMethodData, router_data_v2::RouterDataV2,
     router_request_types::ResponseId,
@@ -799,6 +801,49 @@ impl ForeignTryFrom<(PaymentsAuthorizeRequest, Connectors)> for PaymentFlowData 
         })
     }
 }
+impl ForeignTryFrom<(PaymentsVoidRequest, Connectors)> for PaymentFlowData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        (value, connectors): (PaymentsVoidRequest, Connectors),
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let address: PaymentAddress = {
+            hyperswitch_domain_models::payment_address::PaymentAddress::new(
+                None,
+                None,
+                None,
+                Some(false),
+            )
+        };
+        Ok(Self {
+            merchant_id: hyperswitch_common_utils::id_type::MerchantId::default(),
+            payment_id: "IRRELEVANT_PAYMENT_ID".to_string(),
+            attempt_id: "IRRELEVANT_ATTEMPT_ID".to_string(),
+            status: hyperswitch_common_enums::AttemptStatus::Pending,
+            payment_method: hyperswitch_common_enums::PaymentMethod::Card, //TODO
+            address,
+            auth_type: hyperswitch_common_enums::AuthenticationType::default(),
+            connector_request_reference_id: value.connector_request_reference_id,
+            customer_id: None,
+            connector_customer: None,
+            description: None,
+            return_url: None,
+            connector_meta_data: None,
+            amount_captured: None,
+            minor_amount_captured: None,
+            access_token: None,
+            session_token: None,
+            reference_id: None,
+            payment_method_token: None,
+            preprocessing_id: None,
+            connector_api_version: None,
+            test_mode: None,
+            connector_http_status_code: None,
+            external_latency: None,
+            connectors,
+        })
+    }
+}
 
 impl ForeignTryFrom<ResponseId> for grpc_api_types::payments::ResponseId {
     type Error = ApplicationErrorResponse;
@@ -1053,6 +1098,64 @@ impl ForeignFrom<hyperswitch_common_enums::RefundStatus>
     }
 }
 
+pub fn generate_payment_void_response(
+    router_data_v2: RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+) -> Result<PaymentsVoidResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let transaction_response = router_data_v2.response;
+
+    match transaction_response {
+        Ok(response) => match response {
+            PaymentsResponseData::TransactionResponse {
+                resource_id,
+                redirection_data: _,
+                connector_metadata: _,
+                network_txn_id: _,
+                connector_response_reference_id,
+                incremental_authorization_allowed: _,
+            } => {
+                let status = router_data_v2.resource_common_data.status;
+                let grpc_status = grpc_api_types::payments::AttemptStatus::foreign_from(status);
+
+                let grpc_resource_id =
+                    grpc_api_types::payments::ResponseId::foreign_try_from(resource_id)?;
+
+                Ok(PaymentsVoidResponse {
+                    resource_id: Some(grpc_resource_id),
+                    status: grpc_status.into(),
+                    connector_response_reference_id,
+                    error_code: None,
+                    error_message: None,
+                })
+            }
+            _ => Err(report!(ApplicationErrorResponse::InternalServerError(
+                ApiError {
+                    sub_code: "INVALID_RESPONSE_TYPE".to_owned(),
+                    error_identifier: 500,
+                    error_message: "Invalid response type received from connector".to_owned(),
+                    error_object: None,
+                }
+            ))),
+        },
+        Err(e) => {
+            let status = e
+                .attempt_status
+                .map(grpc_api_types::payments::AttemptStatus::foreign_from)
+                .unwrap_or_default();
+            Ok(PaymentsVoidResponse {
+                resource_id: Some(grpc_api_types::payments::ResponseId {
+                    id: Some(grpc_api_types::payments::response_id::Id::NoResponseId(
+                        false,
+                    )),
+                }),
+                connector_response_reference_id: e.connector_transaction_id,
+                status: status as i32,
+                error_message: Some(e.message),
+                error_code: Some(e.code),
+            })
+        }
+    }
+}
+
 pub fn generate_payment_sync_response(
     router_data_v2: RouterDataV2<PSync, PaymentFlowData, PaymentsSyncData, PaymentsResponseData>,
 ) -> Result<PaymentsSyncResponse, error_stack::Report<ApplicationErrorResponse>> {
@@ -1215,6 +1318,19 @@ impl ForeignTryFrom<WebhookDetailsResponse> for PaymentsSyncResponse {
             connector_response_reference_id: value.connector_response_reference_id,
             error_code: value.error_code,
             error_message: value.error_message,
+        })
+    }
+}
+
+impl ForeignTryFrom<PaymentsVoidRequest> for PaymentVoidData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        value: PaymentsVoidRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(Self {
+            connector_transaction_id: value.connector_request_reference_id,
+            cancellation_reason: value.cancellation_reason,
         })
     }
 }

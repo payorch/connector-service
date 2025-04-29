@@ -52,6 +52,7 @@ pub fn auth_from_metadata(
 
     let auth = parse_metadata(metadata, X_AUTH)?;
 
+    #[allow(clippy::wildcard_in_or_patterns)]
     match auth {
         "header-key" => Ok(ConnectorAuthType::HeaderKey {
             api_key: parse_metadata(metadata, X_API_KEY)?.to_string().into(),
@@ -71,9 +72,11 @@ pub fn auth_from_metadata(
             key2: parse_metadata(metadata, X_KEY2)?.to_string().into(),
             api_secret: parse_metadata(metadata, X_API_SECRET)?.to_string().into(),
         }),
-        _ => Err(tonic::Status::invalid_argument(format!(
-            "Invalid auth type: {auth}"
-        ))),
+        "no-key" => Ok(ConnectorAuthType::NoKey),
+        "temporary-auth" => Ok(ConnectorAuthType::TemporaryAuth),
+        "currency-auth-key" | "certificate-auth" | _ => Err(tonic::Status::invalid_argument(
+            format!("Invalid auth type: {auth}"),
+        )),
     }
 }
 

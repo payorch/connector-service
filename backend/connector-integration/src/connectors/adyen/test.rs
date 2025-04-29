@@ -11,7 +11,7 @@ mod tests {
         use domain_types::types::ConnectorParams;
         use domain_types::types::Connectors;
         use hyperswitch_common_utils::pii::Email;
-        use hyperswitch_common_utils::request::{Method, RequestContent};
+        use hyperswitch_common_utils::request::RequestContent;
         use hyperswitch_common_utils::types::MinorUnit;
         use hyperswitch_domain_models::{
             payment_method_data::PaymentMethodData,

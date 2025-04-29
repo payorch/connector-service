@@ -6,6 +6,7 @@ service PaymentService {
   rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
   rpc RefundSync(RefundsSyncRequest) returns (RefundsSyncResponse);
+  rpc VoidPayment(PaymentsVoidRequest) returns (PaymentsVoidResponse);
   rpc IncomingWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
   rpc Refund(RefundsRequest) returns (RefundsResponse);
   rpc PaymentCapture(PaymentsCaptureRequest) returns (PaymentsCaptureResponse);
@@ -86,6 +87,19 @@ message RefundsSyncResponse {
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
+}
+
+message PaymentsVoidRequest {
+  string connector_request_reference_id = 2;
+  optional string cancellation_reason = 1;
+}
+
+message PaymentsVoidResponse {
+  ResponseId resource_id = 1;
+  optional string connector_response_reference_id = 3;
+  AttemptStatus status = 8;
+  optional string error_code = 4;
+  optional string error_message = 5;
 }
 
 message IncomingWebhookRequest {
