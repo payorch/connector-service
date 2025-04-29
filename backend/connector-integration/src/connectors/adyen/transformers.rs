@@ -1,10 +1,8 @@
 use domain_types::{
-    connector_flow::{
-        Capture, {Authorize, Refund},
-    },
+    connector_flow::{Authorize, Capture, Refund, Void},
     connector_types::{
-        EventType, PaymentFlowData, PaymentsAuthorizeData, PaymentsCaptureData, PaymentsResponseData, RefundFlowData, RefundsData,
-        RefundsResponseData,
+        EventType, PaymentFlowData, PaymentVoidData, PaymentsAuthorizeData, PaymentsCaptureData, PaymentsResponseData,
+        RefundFlowData, RefundsData, RefundsResponseData,
     },
 };
 use error_stack::ResultExt;
@@ -51,7 +49,7 @@ pub enum CardBrand {
     Visa,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Serialize, PartialEq)]
 pub enum ConnectorError {
     ParsingFailed,
     NotImplemented,
@@ -465,6 +463,14 @@ pub struct AdyenPaymentRequest {
     device_fingerprint: Option<Secret<String>>,
 }
 
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenVoidRequest {
+    merchant_account: Secret<String>,
+    reference: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AdyenRouterData<T> {
     pub amount: MinorUnit,
@@ -682,6 +688,21 @@ impl
     }
 }
 
+impl TryFrom<&RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>>
+    for AdyenVoidRequest
+{
+    type Error = Error;
+    fn try_from(
+        item: &RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+    ) -> Result<Self, Self::Error> {
+        let auth_type = AdyenAuthType::try_from(&item.connector_auth_type)?;
+        Ok(Self {
+            merchant_account: auth_type.merchant_account,
+            reference: item.request.connector_transaction_id.clone(),
+        })
+    }
+}
+
 pub struct ResponseRouterData<Flow, R, Request, Response> {
     pub response: R,
     pub data: RouterData<Flow, Request, Response>,
@@ -707,6 +728,14 @@ pub struct AdyenResponse {
     additional_data: Option<AdditionalData>,
     splits: Option<Vec<AdyenSplitData>>,
     store: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdyenVoidResponse {
+    payment_psp_reference: String,
+    status: AdyenVoidStatus,
+    reference: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -843,6 +872,59 @@ impl<F, Req>
 
         Ok(Self {
             response: error.map_or_else(|| Ok(payment_response_data), Err),
+            resource_common_data: PaymentFlowData {
+                status,
+                ..data.resource_common_data
+            },
+            ..data
+        })
+    }
+}
+
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum AdyenVoidStatus {
+    Received,
+    #[default]
+    Processing,
+}
+
+impl ForeignTryFrom<AdyenVoidStatus> for hyperswitch_common_enums::AttemptStatus {
+    type Error = hyperswitch_interfaces::errors::ConnectorError;
+    fn foreign_try_from(item: AdyenVoidStatus) -> Result<Self, Self::Error> {
+        match item {
+            AdyenVoidStatus::Received => Ok(Self::Voided),
+            AdyenVoidStatus::Processing => Ok(Self::VoidInitiated),
+        }
+    }
+}
+
+impl
+    ForeignTryFrom<(
+        AdyenVoidResponse,
+        RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+    )> for RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>
+{
+    type Error = Error;
+    fn foreign_try_from(
+        (response, data): (
+            AdyenVoidResponse,
+            RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let status = AttemptStatus::Pending;
+
+        let payment_void_response_data = PaymentsResponseData::TransactionResponse {
+            resource_id: ResponseId::ConnectorTransactionId(response.payment_psp_reference),
+            redirection_data: Box::new(None),
+            connector_metadata: None,
+            network_txn_id: None,
+            connector_response_reference_id: Some(response.reference),
+            incremental_authorization_allowed: None,
+        };
+
+        Ok(Self {
+            response: Ok(payment_void_response_data),
             resource_common_data: PaymentFlowData {
                 status,
                 ..data.resource_common_data

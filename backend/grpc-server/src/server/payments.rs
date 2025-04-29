@@ -1,11 +1,12 @@
 use crate::configs::Config;
 use connector_integration::types::ConnectorData;
+use domain_types::types::generate_payment_void_response;
 use domain_types::{
-    connector_flow::{Authorize, Capture, CreateOrder, PSync, RSync, Refund},
+    connector_flow::{Authorize, Capture, CreateOrder, PSync, RSync, Refund, Void},
     connector_types::{
         PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentsAuthorizeData,
         PaymentsCaptureData, PaymentsResponseData, PaymentsSyncData, RefundFlowData,
-        RefundSyncData, RefundsData, RefundsResponseData,
+        RefundSyncData, RefundsData, RefundsResponseData, PaymentVoidData
     },
 };
 use domain_types::{
@@ -19,8 +20,9 @@ use external_services;
 use grpc_api_types::payments::{
     payment_service_server::PaymentService, IncomingWebhookRequest, IncomingWebhookResponse,
     PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsCaptureRequest,
-    PaymentsCaptureResponse, PaymentsSyncRequest, PaymentsSyncResponse, RefundsRequest,
-    RefundsResponse, RefundsSyncRequest, RefundsSyncResponse,
+    PaymentsCaptureResponse, PaymentsSyncRequest, PaymentsSyncResponse, PaymentsVoidRequest, PaymentsVoidResponse, RefundsRequest,
+    RefundsResponse, RefundsSyncRequest,
+    RefundsSyncResponse,
 };
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
@@ -446,6 +448,75 @@ impl PaymentService for Payments {
             .map_err(|e| tonic::Status::internal(format!("Response generation error: {}", e)))?;
 
         Ok(tonic::Response::new(sync_response))
+    }
+
+    async fn void_payment(
+        &self,
+        request: tonic::Request<PaymentsVoidRequest>,
+    ) -> Result<tonic::Response<PaymentsVoidResponse>, tonic::Status> {
+        info!("PAYMENT_CANCEL_FLOW: initiated");
+        let payload = request.into_inner();
+
+        let connector =
+            domain_types::connector_types::ConnectorEnum::foreign_try_from(payload.connector)
+                .map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid connector: {}", e))
+                })?;
+
+        // Get connector data
+        let connector_data = ConnectorData::get_connector_by_name(&connector);
+
+        // Get connector integration
+        let connector_integration: BoxedConnectorIntegrationV2<
+            '_,
+            Void,
+            PaymentFlowData,
+            PaymentVoidData,
+            PaymentsResponseData,
+        > = connector_data.connector.get_connector_integration_v2();
+
+        // Extract auth credentials
+        let auth_creds = payload.auth_creds.clone();
+
+        let payment_flow_data =
+            PaymentFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+                .map_err(|e| {
+                    tonic::Status::invalid_argument(format!("Invalid request data: {}", e))
+                })?;
+
+        let auth_creds = auth_creds
+            .ok_or_else(|| tonic::Status::invalid_argument("Missing auth_creds in request"))?;
+
+        let connector_auth_details =
+            ConnectorAuthType::foreign_try_from(auth_creds).map_err(|e| {
+                tonic::Status::invalid_argument(format!("Invalid auth_creds in request: {}", e))
+            })?;
+
+        let payment_void_data = PaymentVoidData::foreign_try_from(payload.clone())
+            .map_err(|e| tonic::Status::invalid_argument(format!("Invalid request data: {}", e)))?;
+
+        let router_data =
+            RouterDataV2::<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData> {
+                flow: std::marker::PhantomData,
+                resource_common_data: payment_flow_data,
+                connector_auth_type: connector_auth_details,
+                request: payment_void_data,
+                response: Err(ErrorResponse::default()),
+            };
+
+        // Execute connector processing
+        let response = external_services::service::execute_connector_processing_step(
+            &self.config.proxy,
+            connector_integration,
+            router_data,
+        )
+        .await
+        .map_err(|e| tonic::Status::internal(format!("Connector processing error: {}", e)))?;
+
+        let void_response = generate_payment_void_response(response)
+            .map_err(|e| tonic::Status::internal(format!("Response generation error: {}", e)))?;
+
+        Ok(tonic::Response::new(void_response))
     }
 
     async fn incoming_webhook(

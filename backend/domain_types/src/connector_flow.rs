@@ -8,6 +8,9 @@ pub struct Authorize;
 pub struct PSync;
 
 #[derive(Debug, Clone)]
+pub struct Void;
+
+#[derive(Debug, Clone)]
 pub struct RSync;
 
 #[derive(Debug, Clone)]

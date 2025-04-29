@@ -5,29 +5,26 @@ mod tests {
         use crate::types::ConnectorData;
         use domain_types::connector_flow::Authorize;
         use domain_types::connector_types::{
-            BoxedConnector,
-            ConnectorEnum,
-            PaymentFlowData,
-            PaymentsAuthorizeData,
+            BoxedConnector, ConnectorEnum, PaymentFlowData, PaymentsAuthorizeData,
             PaymentsResponseData,
         };
         use domain_types::types::ConnectorParams;
         use domain_types::types::Connectors;
         use hyperswitch_common_utils::pii::Email;
-        use hyperswitch_common_utils::request::{ Method, RequestContent };
+        use hyperswitch_common_utils::request::{Method, RequestContent};
         use hyperswitch_common_utils::types::MinorUnit;
         use hyperswitch_domain_models::{
             payment_method_data::PaymentMethodData,
-            router_data::{ ConnectorAuthType, ErrorResponse },
+            router_data::{ConnectorAuthType, ErrorResponse},
             router_data_v2::RouterDataV2,
         };
         use hyperswitch_interfaces::connector_integration_v2::BoxedConnectorIntegrationV2;
         use hyperswitch_masking::Secret;
         use serde_json::json;
         use std::borrow::Cow;
+        use std::env;
         use std::marker::PhantomData;
         use std::str::FromStr;
-        use std::env;
         #[test]
         fn test_build_request_valid() {
             let api_key = env::var("API_KEY").expect("API_KEY not set");
@@ -36,7 +33,7 @@ mod tests {
                 Authorize,
                 PaymentFlowData,
                 PaymentsAuthorizeData,
-                PaymentsResponseData
+                PaymentsResponseData,
             > = RouterDataV2 {
                 flow: PhantomData::<domain_types::connector_flow::Authorize>,
                 resource_common_data: PaymentFlowData {
@@ -50,10 +47,7 @@ mod tests {
                     description: Some("Payment for order #12345".to_string()),
                     return_url: Some("www.google.com".to_string()),
                     address: hyperswitch_domain_models::payment_address::PaymentAddress::new(
-                        None,
-                        None,
-                        None,
-                        None
+                        None, None, None, None,
                     ),
                     auth_type: hyperswitch_common_enums::AuthenticationType::ThreeDs,
                     connector_meta_data: None,
@@ -85,14 +79,16 @@ mod tests {
                 request: PaymentsAuthorizeData {
                     payment_method_data: PaymentMethodData::Card(
                         (hyperswitch_domain_models::payment_method_data::Card {
-                            card_number: hyperswitch_cards::CardNumber
-                                ::from_str("5123456789012346")
-                                .unwrap(),
+                            card_number: hyperswitch_cards::CardNumber::from_str(
+                                "5123456789012346",
+                            )
+                            .unwrap(),
                             card_cvc: Secret::new("100".into()),
                             card_exp_month: Secret::new("03".into()),
                             card_exp_year: Secret::new("2030".into()),
                             ..Default::default()
-                        }).into()
+                        })
+                        .into(),
                     ),
                     amount: 1000 as i64,
                     order_tax_amount: None,
@@ -119,16 +115,17 @@ mod tests {
                             screen_height: Some(1080 as u32),
                             screen_width: Some(1920 as u32),
                             user_agent: Some(
-                                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)".to_string()
+                                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)".to_string(),
                             ),
                             accept_header: Some(
-                                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8".to_string()
+                                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                                    .to_string(),
                             ),
                             java_script_enabled: Some(false),
                             language: Some("en-US".to_string()),
                             time_zone: None,
                             ip_address: None,
-                        }
+                        },
                     ),
                     order_category: None,
                     session_token: None,
@@ -137,9 +134,10 @@ mod tests {
                     payment_experience: None,
                     payment_method_type: Some(hyperswitch_common_enums::PaymentMethodType::Credit),
                     customer_id: Some(
-                        hyperswitch_common_utils::id_type::CustomerId
-                            ::try_from(Cow::from("cus_123456789".to_string()))
-                            .unwrap()
+                        hyperswitch_common_utils::id_type::CustomerId::try_from(Cow::from(
+                            "cus_123456789".to_string(),
+                        ))
+                        .unwrap(),
                     ),
                     request_incremental_authorization: false,
                     metadata: None,
@@ -163,7 +161,7 @@ mod tests {
                 Authorize,
                 PaymentFlowData,
                 PaymentsAuthorizeData,
-                PaymentsResponseData
+                PaymentsResponseData,
             > = connector_data.connector.get_connector_integration_v2();
 
             let request = connector_integration.build_request_v2(&req).unwrap();
@@ -172,19 +170,15 @@ mod tests {
             // let request = request.expect("Failed to build request");
             let req = request.as_ref().map(|request| {
                 let masked_request = match request.body.as_ref() {
-                    Some(request) =>
-                        match request {
-                            | RequestContent::Json(i)
-                            | RequestContent::FormUrlEncoded(i)
-                            | RequestContent::Xml(i) =>
-                                i
-                                    .masked_serialize()
-                                    .unwrap_or(
-                                        json!({ "error": "failed to mask serialize connector request"})
-                                    ),
-                            RequestContent::FormData(_) => json!({"requ est_type": "FORM_DATA"}),
-                            RequestContent::RawBytes(_) => json!({"request_type": "RAW_BYTES"}),
-                        }
+                    Some(request) => match request {
+                        RequestContent::Json(i)
+                        | RequestContent::FormUrlEncoded(i)
+                        | RequestContent::Xml(i) => i.masked_serialize().unwrap_or(
+                            json!({ "error": "failed to mask serialize connector request"}),
+                        ),
+                        RequestContent::FormData(_) => json!({"requ est_type": "FORM_DATA"}),
+                        RequestContent::RawBytes(_) => json!({"request_type": "RAW_BYTES"}),
+                    },
                     None => serde_json::Value::Null,
                 };
                 masked_request
@@ -200,7 +194,7 @@ mod tests {
                 Authorize,
                 PaymentFlowData,
                 PaymentsAuthorizeData,
-                PaymentsResponseData
+                PaymentsResponseData,
             > = RouterDataV2 {
                 flow: PhantomData::<Authorize>,
                 resource_common_data: PaymentFlowData {
@@ -214,10 +208,7 @@ mod tests {
                     description: None,
                     return_url: None,
                     address: hyperswitch_domain_models::payment_address::PaymentAddress::new(
-                        None,
-                        None,
-                        None,
-                        None
+                        None, None, None, None,
                     ),
                     auth_type: hyperswitch_common_enums::AuthenticationType::ThreeDs,
                     connector_meta_data: None,
@@ -293,7 +284,7 @@ mod tests {
                 Authorize,
                 PaymentFlowData,
                 PaymentsAuthorizeData,
-                PaymentsResponseData
+                PaymentsResponseData,
             > = connector_data.connector.get_connector_integration_v2();
 
             let result = connector_integration.build_request_v2(&req);

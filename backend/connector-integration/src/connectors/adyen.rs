@@ -1,5 +1,5 @@
-pub mod transformers;
 mod test;
+pub mod transformers;
 
 use hyperswitch_common_utils::{
     errors::CustomResult,
@@ -28,19 +28,17 @@ use hyperswitch_interfaces::{
 use hyperswitch_masking::{Mask, Maskable};
 
 use domain_types::{
-    connector_flow::{Authorize, Capture, PSync, RSync, Refund},
+    connector_flow::{Authorize, CreateOrder, Capture, PSync, RSync, Refund, Void},
     connector_types::{
         ConnectorServiceTrait, ConnectorWebhookSecrets, IncomingWebhook, PaymentAuthorizeV2,
-        PaymentCapture, PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData,
-        PaymentOrderCreate, PaymentSyncV2, PaymentsAuthorizeData, PaymentsCaptureData,
-        PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundSyncV2,
-        RefundV2, RefundsData, RefundWebhookDetailsResponse, RefundsResponseData, RequestDetails, ValidationTrait,
-        WebhookDetailsResponse,
+        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
+        PaymentSyncV2, PaymentVoidData, PaymentVoidV2, PaymentsAuthorizeData, PaymentsResponseData,
+        PaymentsSyncData, RefundFlowData, RefundSyncData, RefundSyncV2, RefundV2,
+        RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, RequestDetails,
+        ValidationTrait, WebhookDetailsResponse, PaymentCapture, PaymentsCaptureData
     },
 };
 use transformers::{self as adyen, AdyenNotificationRequestItemWH, ForeignTryFrom};
-
-use domain_types::connector_flow::CreateOrder;
 
 pub(crate) mod headers {
     pub(crate) const CONTENT_TYPE: &str = "Content-Type";
@@ -50,6 +48,7 @@ pub(crate) mod headers {
 impl ConnectorServiceTrait for Adyen {}
 impl PaymentAuthorizeV2 for Adyen {}
 impl PaymentSyncV2 for Adyen {}
+impl PaymentVoidV2 for Adyen {}
 impl RefundSyncV2 for Adyen {}
 impl RefundV2 for Adyen {}
 impl PaymentCapture for Adyen {}
@@ -449,6 +448,78 @@ impl
 {
 }
 
+impl ConnectorIntegrationV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>
+    for Adyen
+{
+    fn get_headers(
+        &self,
+        req: &RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+    ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
+    where
+        Self: ConnectorIntegrationV2<
+            Void,
+            PaymentFlowData,
+            PaymentVoidData,
+            PaymentsResponseData,
+        >,
+    {
+        let mut header = vec![(
+            headers::CONTENT_TYPE.to_string(),
+            "application/json".to_string().into(),
+        )];
+        let mut api_key = self.get_auth_header(&req.connector_auth_type)?;
+        header.append(&mut api_key);
+        Ok(header)
+    }
+
+    fn get_url(
+        &self,
+        req: &RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+    ) -> CustomResult<String, errors::ConnectorError> {
+        let id = req.request.connector_transaction_id.clone();
+        let endpoint = req.resource_common_data.connectors.adyen.base_url.clone();
+        Ok(format!(
+            "{}{}/payments/{}/cancels",
+            endpoint, ADYEN_API_VERSION, id
+        ))
+    }
+
+    fn get_request_body(
+        &self,
+        req: &RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+    ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
+        let connector_req = adyen::AdyenVoidRequest::try_from(req)?;
+        Ok(Some(RequestContent::Json(Box::new(connector_req))))
+    }
+
+    fn handle_response_v2(
+        &self,
+        data: &RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+        event_builder: Option<&mut ConnectorEvent>,
+        res: Response,
+    ) -> CustomResult<
+        RouterDataV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>,
+        errors::ConnectorError,
+    > {
+        let response: adyen::AdyenVoidResponse =
+            res.response
+                .parse_struct("AdyenCancelResponse")
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+        with_response_body!(event_builder, response);
+
+        RouterDataV2::foreign_try_from((response, data.clone()))
+            .change_context(errors::ConnectorError::ResponseHandlingFailed)
+    }
+
+    fn get_error_response_v2(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+}
+
 impl ConnectorIntegrationV2<RSync, RefundFlowData, RefundSyncData, RefundsResponseData> for Adyen {}
 
 impl IncomingWebhook for Adyen {
@@ -520,12 +591,7 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
         req: &RouterDataV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
     ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
     where
-        Self: ConnectorIntegrationV2<
-            Refund,
-            RefundFlowData,
-            RefundsData,
-            RefundsResponseData,
-        >,
+        Self: ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponseData>,
     {
         let mut header = vec![(
             headers::CONTENT_TYPE.to_string(),
