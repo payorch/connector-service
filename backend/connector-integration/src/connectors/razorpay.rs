@@ -647,4 +647,91 @@ impl ConnectorIntegrationV2<Refund, RefundFlowData, RefundsData, RefundsResponse
 impl ConnectorIntegrationV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>
     for Razorpay
 {
+    fn get_headers(
+        &self,
+        req: &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+    ) -> CustomResult<Vec<(String, Maskable<String>)>, errors::ConnectorError>
+    where
+        Self: ConnectorIntegrationV2<
+            Capture,
+            PaymentFlowData,
+            PaymentsCaptureData,
+            PaymentsResponseData,
+        >,
+    {
+        let mut header = vec![(
+            headers::CONTENT_TYPE.to_string(),
+            "application/json".to_string().into(),
+        )];
+        let mut api_key = self.get_auth_header(&req.connector_auth_type)?;
+        header.append(&mut api_key);
+        Ok(header)
+    }
+
+    fn get_url(
+        &self,
+        req: &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+    ) -> CustomResult<String, errors::ConnectorError> {
+        let id = match &req.request.connector_transaction_id {
+            ResponseId::ConnectorTransactionId(id) => id,
+            _ => {
+                return Err(errors::ConnectorError::MissingConnectorTransactionID.into());
+            }
+        };
+        Ok(format!(
+            "{}v1/payments/{}/capture",
+            req.resource_common_data.connectors.razorpay.base_url, id
+        ))
+    }
+
+    fn get_request_body(
+        &self,
+        req: &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+    ) -> CustomResult<Option<RequestContent>, errors::ConnectorError> {
+        let connector_router_data =
+            razorpay::RazorpayRouterData::try_from((req.request.minor_amount_to_capture, req))?;
+        let connector_req = razorpay::RazorpayCaptureRequest::try_from(&connector_router_data)?;
+        Ok(Some(RequestContent::Json(Box::new(connector_req))))
+    }
+
+    fn handle_response_v2(
+        &self,
+        data: &RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+        event_builder: Option<&mut ConnectorEvent>,
+        res: Response,
+    ) -> CustomResult<
+        RouterDataV2<Capture, PaymentFlowData, PaymentsCaptureData, PaymentsResponseData>,
+        errors::ConnectorError,
+    > {
+        let response: razorpay::RazorpayCaptureResponse = res
+        .response
+        .parse_struct("RazorpayCaptureResponse")
+        .map_err(|err| {
+            report!(errors::ConnectorError::ResponseDeserializationFailed)
+                .attach_printable(format!(
+                    "Failed to parse RazorpayCaptureResponse: {err:?}"
+                ))
+        })?;
+
+        with_response_body!(event_builder, response);
+
+        RouterDataV2::foreign_try_from((response, data.clone()))
+            .change_context(errors::ConnectorError::ResponseHandlingFailed)
+    }
+
+    fn get_error_response_v2(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
+
+    fn get_5xx_error_response(
+        &self,
+        res: Response,
+        event_builder: Option<&mut ConnectorEvent>,
+    ) -> CustomResult<ErrorResponse, errors::ConnectorError> {
+        self.build_error_response(res, event_builder)
+    }
 }
