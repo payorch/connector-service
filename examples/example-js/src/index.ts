@@ -30,6 +30,10 @@ interface PaymentRequest {
   enrolled_for_3ds: boolean;
   request_incremental_authorization: boolean;
   minor_amount: number;
+  email: string;
+  browser_info: Record<string,unknown>;
+  connector_customer: string;
+  return_url: string;
 }
 
 async function main() {
@@ -64,20 +68,33 @@ async function main() {
     const request: PaymentRequest = {
       amount: 1000,
       currency: 'USD',
+      email: 'abc@gmail.com',
       // connector: 'ADYEN', // TODO: move to headers
       // auth_creds: { signature_key: { api_key: '', key1: '', api_secret: '' } }, // TODO: move to headers
       payment_method: 'CARD',
       payment_method_data: { card: { card_number: '4111111111111111', card_exp_month: '03', card_exp_year: '2030', card_cvc: '737' } },
-      address: {},
+      address: { billing: {phone: { number: 1234567890, country_code: "+1" }, email: "abc@gmail.com" }},
       auth_type: 'THREE_DS',
       connector_request_reference_id: 'ref_12345',
       enrolled_for_3ds: true,
       request_incremental_authorization: false,
       minor_amount: 1000,
+      connector_customer: 'cus_1233',
+      browser_info:{},
+      return_url: 'www.google.com'
     };
-
+    const metadata = new grpc.Metadata();
+    metadata.add('x-connector', 'adyen');
+    metadata.add('x-auth', 'body-key');
+    if (process.env.API_KEY && process.env.KEY1) {
+      metadata.add('x-api-key', process.env.API_KEY);
+      metadata.add('x-key1', process.env.KEY1);
+    } else {
+      logger.error('API_KEY or KEY1 is not defined in environment variables');
+      process.exit(1);
+    }
     logger.info('Sending PaymentAuthorize request...');
-    client.PaymentAuthorize(request, (error: grpc.ServiceError | null, response: any) => {
+    client.PaymentAuthorize(request, metadata, (error: grpc.ServiceError | null, response: any) => {
       if (error) {
         logger.error(`RPC error: ${error.code}: ${error.details}`);
         return;

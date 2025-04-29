@@ -1,4 +1,4 @@
-use grpc_api_types::payments::{self, payment_service_client::PaymentServiceClient};
+use grpc_api_types::payments::{self, payment_service_client::PaymentServiceClient,Address, PhoneDetails};
 use std::error::Error;
 
 #[tokio::main]
@@ -46,10 +46,11 @@ async fn make_payment_authorization_request(
 
     let api_key = std::env::var("API_KEY").unwrap_or_else(|_| "default_api_key".to_string());
     let key1 = std::env::var("KEY1").unwrap_or_else(|_| "default_key1".to_string());
+    println!("api_key is {} and key1 is {}", api_key,key1);
 
     // Create a request with the updated values
     let request = payments::PaymentsAuthorizeRequest {
-        amount: 1000,
+        amount: 1000 as i64,
         currency: payments::Currency::Usd as i32,
         // connector: payments::Connector::Adyen as i32,
         // auth_creds: Some(payments::AuthType {
@@ -79,15 +80,22 @@ async fn make_payment_authorization_request(
                 ..Default::default()
             })),
         }),
-        connector_customer: Some("customer_12345".to_string()),
-        return_url: Some("www.google.com".to_string()),
-        address: Some(payments::PaymentAddress::default()),
+        // connector_customer: Some("customer_12345".to_string()),
+        // return_url: Some("www.google.com".to_string()),
+        address:Some(payments::PaymentAddress{
+            shipping:None,
+            billing:Some(Address { address: None, phone: Some(PhoneDetails { number: Some("1234567890".to_string()), country_code: Some("+1".to_string()) }), email: Some("sweta.sharma@juspay.in".to_string()) }),
+            unified_payment_method_billing: None,
+            payment_method_billing: None
+        }),
         auth_type: payments::AuthenticationType::ThreeDs as i32,
         connector_request_reference_id: "ref_12345".to_string(),
         enrolled_for_3ds: true,
         request_incremental_authorization: false,
-        minor_amount: 1000,
+        minor_amount: 1000 as i64,
         email: Some("sweta.sharma@juspay.in".to_string()),
+        connector_customer: Some("cus_1234".to_string()),
+        return_url: Some("www.google.com".to_string()),
         browser_info: Some(payments::BrowserInformation {
             // Added browser_info
             user_agent: Some("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)".to_string()),
@@ -107,7 +115,7 @@ async fn make_payment_authorization_request(
     let mut request = tonic::Request::new(request);
     request
         .metadata_mut()
-        .append("x-connector", "razorpay".parse().unwrap());
+        .append("x-connector", "adyen".parse().unwrap());
     request
         .metadata_mut()
         .append("x-auth", "body-key".parse().unwrap());
