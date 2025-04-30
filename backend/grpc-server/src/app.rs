@@ -1,4 +1,5 @@
 use crate::{configs, error::ConfigurationError, logger, metrics, utils};
+use crate::consts;
 use axum::http;
 use grpc_api_types::{
     health_check::health_server,
@@ -10,7 +11,7 @@ use tokio::{
     sync::oneshot,
 };
 use tonic::transport::Server;
-use tower_http::trace as tower_trace;
+use tower_http::{request_id::MakeRequestUuid, trace as tower_trace};
 
 use grpc_api_types::health_check::health_handler;
 
@@ -84,8 +85,8 @@ pub async fn server_builder(config: configs::Config) -> Result<(), Configuration
 }
 
 pub struct Service {
-    health_check_service: crate::server::health_check::HealthCheck,
-    payments_service: crate::server::payments::Payments,
+    pub health_check_service: crate::server::health_check::HealthCheck,
+    pub payments_service: crate::server::payments::Payments,
 }
 
 impl Service {
@@ -122,8 +123,19 @@ impl Service {
                     .level(tracing::Level::ERROR),
             );
 
+        let request_id_layer = tower_http::request_id::SetRequestIdLayer::new(
+            http::HeaderName::from_static(consts::X_REQUEST_ID),
+            MakeRequestUuid,
+        );
+
+        let propogate_request_id_layer = tower_http::request_id::PropagateRequestIdLayer::new(
+            http::HeaderName::from_static(consts::X_REQUEST_ID),
+        );
+
         let router = axum::Router::new()
             .layer(logging_layer)
+            .layer(request_id_layer)
+            .layer(propogate_request_id_layer)
             .merge(health_handler(self.health_check_service))
             .merge(payment_service_handler(self.payments_service));
 
@@ -161,8 +173,19 @@ impl Service {
                     .level(tracing::Level::ERROR),
             );
 
+
+        let request_id_layer = tower_http::request_id::SetRequestIdLayer::new(
+            http::HeaderName::from_static(consts::X_REQUEST_ID),
+            MakeRequestUuid,
+        );
+        let propogate_request_id_layer = tower_http::request_id::PropagateRequestIdLayer::new(
+            http::HeaderName::from_static(consts::X_REQUEST_ID),
+        );
+
         Server::builder()
             .layer(logging_layer)
+            .layer(request_id_layer)
+            .layer(propogate_request_id_layer)
             .add_service(reflection_service)
             .add_service(health_server::HealthServer::new(self.health_check_service))
             .add_service(payment_service_server::PaymentServiceServer::new(
