@@ -23,6 +23,7 @@ export const protobufPackage = "ucs.payments";
 
 export enum EventType {
   PAYMENT = 0,
+  REFUND = 1,
   UNRECOGNIZED = -1,
 }
 
@@ -31,6 +32,9 @@ export function eventTypeFromJSON(object: any): EventType {
     case 0:
     case "PAYMENT":
       return EventType.PAYMENT;
+    case 1:
+    case "REFUND":
+      return EventType.REFUND;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -42,6 +46,8 @@ export function eventTypeToJSON(object: EventType): string {
   switch (object) {
     case EventType.PAYMENT:
       return "PAYMENT";
+    case EventType.REFUND:
+      return "REFUND";
     case EventType.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
@@ -4284,8 +4290,6 @@ export function refundStatusToJSON(object: RefundStatus): string {
 export interface PaymentsAuthorizeRequest {
   amount: number;
   currency: Currency;
-  connector: Connector;
-  authCreds: AuthType | undefined;
   paymentMethod: PaymentMethod;
   paymentMethodData: PaymentMethodData | undefined;
   connectorCustomer?: string | undefined;
@@ -4332,8 +4336,6 @@ export interface PaymentsAuthorizeResponse {
 }
 
 export interface PaymentsSyncRequest {
-  connector: Connector;
-  authCreds: AuthType | undefined;
   resourceId: string;
   connectorRequestReferenceId?: string | undefined;
 }
@@ -4349,8 +4351,6 @@ export interface PaymentsSyncResponse {
 }
 
 export interface RefundsSyncRequest {
-  connector: Connector;
-  authCreds: AuthType | undefined;
   connectorRefundId: string;
   connectorTransactionId: string;
   refundReason?: string | undefined;
@@ -4364,11 +4364,22 @@ export interface RefundsSyncResponse {
   errorMessage?: string | undefined;
 }
 
+export interface PaymentsVoidRequest {
+  connectorRequestReferenceId: string;
+  cancellationReason?: string | undefined;
+}
+
+export interface PaymentsVoidResponse {
+  resourceId: ResponseId | undefined;
+  connectorResponseReferenceId?: string | undefined;
+  status: AttemptStatus;
+  errorCode?: string | undefined;
+  errorMessage?: string | undefined;
+}
+
 export interface IncomingWebhookRequest {
-  connector: Connector;
   requestDetails: RequestDetails | undefined;
   webhookSecrets?: ConnectorWebhookSecrets | undefined;
-  authCreds?: AuthType | undefined;
 }
 
 export interface IncomingWebhookResponse {
@@ -4379,6 +4390,7 @@ export interface IncomingWebhookResponse {
 
 export interface WebhookResponseContent {
   paymentsResponse?: PaymentsSyncResponse | undefined;
+  refundsResponse?: RefundsSyncResponse | undefined;
 }
 
 export interface RequestDetails {
@@ -4401,8 +4413,6 @@ export interface ConnectorWebhookSecrets {
 
 export interface RefundsRequest {
   refundId: string;
-  connector: Connector;
-  authCreds: AuthType | undefined;
   connectorTransactionId: string;
   connectorRefundId?: string | undefined;
   currency: Currency;
@@ -4424,46 +4434,6 @@ export interface RefundsResponse {
   refundStatus: RefundStatus;
   errorCode?: string | undefined;
   errorMessage?: string | undefined;
-}
-
-/** Add these new message and enum types */
-export interface AuthType {
-  headerKey?: HeaderKey | undefined;
-  bodyKey?: BodyKey | undefined;
-  signatureKey?: SignatureKey | undefined;
-  multiAuthKey?: MultiAuthKey | undefined;
-  certificateAuth?:
-    | CertificateAuth
-    | undefined;
-  /** Using bool as a presence indicator for NoKey */
-  noKey?: boolean | undefined;
-}
-
-export interface HeaderKey {
-  apiKey: string;
-}
-
-export interface BodyKey {
-  apiKey: string;
-  key1: string;
-}
-
-export interface SignatureKey {
-  apiKey: string;
-  key1: string;
-  apiSecret: string;
-}
-
-export interface MultiAuthKey {
-  apiKey: string;
-  key1: string;
-  apiSecret: string;
-  key2: string;
-}
-
-export interface CertificateAuth {
-  certificate: string;
-  privateKey: string;
 }
 
 export interface ResponseId {
@@ -4602,12 +4572,31 @@ export interface PaymentMethodToken {
   token: string;
 }
 
+export interface MultipleCaptureRequestData {
+  captureSequence: number;
+  captureReference: string;
+}
+
+export interface PaymentsCaptureRequest {
+  connectorTransactionId: string;
+  amountToCapture: number;
+  currency: Currency;
+  multipleCaptureData?: MultipleCaptureRequestData | undefined;
+  connectorMetaData?: Uint8Array | undefined;
+}
+
+export interface PaymentsCaptureResponse {
+  resourceId: ResponseId | undefined;
+  connectorResponseReferenceId?: string | undefined;
+  status: AttemptStatus;
+  errorCode?: string | undefined;
+  errorMessage?: string | undefined;
+}
+
 function createBasePaymentsAuthorizeRequest(): PaymentsAuthorizeRequest {
   return {
     amount: 0,
     currency: 0,
-    connector: 0,
-    authCreds: undefined,
     paymentMethod: 0,
     paymentMethodData: undefined,
     connectorCustomer: undefined,
@@ -4649,12 +4638,6 @@ export const PaymentsAuthorizeRequest: MessageFns<PaymentsAuthorizeRequest> = {
     }
     if (message.currency !== 0) {
       writer.uint32(120).int32(message.currency);
-    }
-    if (message.connector !== 0) {
-      writer.uint32(280).int32(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      AuthType.encode(message.authCreds, writer.uint32(274).fork()).join();
     }
     if (message.paymentMethod !== 0) {
       writer.uint32(16).int32(message.paymentMethod);
@@ -4773,22 +4756,6 @@ export const PaymentsAuthorizeRequest: MessageFns<PaymentsAuthorizeRequest> = {
           }
 
           message.currency = reader.int32() as any;
-          continue;
-        }
-        case 35: {
-          if (tag !== 280) {
-            break;
-          }
-
-          message.connector = reader.int32() as any;
-          continue;
-        }
-        case 34: {
-          if (tag !== 274) {
-            break;
-          }
-
-          message.authCreds = AuthType.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -5052,8 +5019,6 @@ export const PaymentsAuthorizeRequest: MessageFns<PaymentsAuthorizeRequest> = {
     return {
       amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
       currency: isSet(object.currency) ? currencyFromJSON(object.currency) : 0,
-      connector: isSet(object.connector) ? connectorFromJSON(object.connector) : 0,
-      authCreds: isSet(object.authCreds) ? AuthType.fromJSON(object.authCreds) : undefined,
       paymentMethod: isSet(object.paymentMethod) ? paymentMethodFromJSON(object.paymentMethod) : 0,
       paymentMethodData: isSet(object.paymentMethodData)
         ? PaymentMethodData.fromJSON(object.paymentMethodData)
@@ -5117,12 +5082,6 @@ export const PaymentsAuthorizeRequest: MessageFns<PaymentsAuthorizeRequest> = {
     }
     if (message.currency !== 0) {
       obj.currency = currencyToJSON(message.currency);
-    }
-    if (message.connector !== 0) {
-      obj.connector = connectorToJSON(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      obj.authCreds = AuthType.toJSON(message.authCreds);
     }
     if (message.paymentMethod !== 0) {
       obj.paymentMethod = paymentMethodToJSON(message.paymentMethod);
@@ -5227,10 +5186,6 @@ export const PaymentsAuthorizeRequest: MessageFns<PaymentsAuthorizeRequest> = {
     const message = createBasePaymentsAuthorizeRequest();
     message.amount = object.amount ?? 0;
     message.currency = object.currency ?? 0;
-    message.connector = object.connector ?? 0;
-    message.authCreds = (object.authCreds !== undefined && object.authCreds !== null)
-      ? AuthType.fromPartial(object.authCreds)
-      : undefined;
     message.paymentMethod = object.paymentMethod ?? 0;
     message.paymentMethodData = (object.paymentMethodData !== undefined && object.paymentMethodData !== null)
       ? PaymentMethodData.fromPartial(object.paymentMethodData)
@@ -5489,17 +5444,11 @@ export const PaymentsAuthorizeResponse: MessageFns<PaymentsAuthorizeResponse> = 
 };
 
 function createBasePaymentsSyncRequest(): PaymentsSyncRequest {
-  return { connector: 0, authCreds: undefined, resourceId: "", connectorRequestReferenceId: undefined };
+  return { resourceId: "", connectorRequestReferenceId: undefined };
 }
 
 export const PaymentsSyncRequest: MessageFns<PaymentsSyncRequest> = {
   encode(message: PaymentsSyncRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.connector !== 0) {
-      writer.uint32(280).int32(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      AuthType.encode(message.authCreds, writer.uint32(274).fork()).join();
-    }
     if (message.resourceId !== "") {
       writer.uint32(10).string(message.resourceId);
     }
@@ -5516,22 +5465,6 @@ export const PaymentsSyncRequest: MessageFns<PaymentsSyncRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 35: {
-          if (tag !== 280) {
-            break;
-          }
-
-          message.connector = reader.int32() as any;
-          continue;
-        }
-        case 34: {
-          if (tag !== 274) {
-            break;
-          }
-
-          message.authCreds = AuthType.decode(reader, reader.uint32());
-          continue;
-        }
         case 1: {
           if (tag !== 10) {
             break;
@@ -5559,8 +5492,6 @@ export const PaymentsSyncRequest: MessageFns<PaymentsSyncRequest> = {
 
   fromJSON(object: any): PaymentsSyncRequest {
     return {
-      connector: isSet(object.connector) ? connectorFromJSON(object.connector) : 0,
-      authCreds: isSet(object.authCreds) ? AuthType.fromJSON(object.authCreds) : undefined,
       resourceId: isSet(object.resourceId) ? globalThis.String(object.resourceId) : "",
       connectorRequestReferenceId: isSet(object.connectorRequestReferenceId)
         ? globalThis.String(object.connectorRequestReferenceId)
@@ -5570,12 +5501,6 @@ export const PaymentsSyncRequest: MessageFns<PaymentsSyncRequest> = {
 
   toJSON(message: PaymentsSyncRequest): unknown {
     const obj: any = {};
-    if (message.connector !== 0) {
-      obj.connector = connectorToJSON(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      obj.authCreds = AuthType.toJSON(message.authCreds);
-    }
     if (message.resourceId !== "") {
       obj.resourceId = message.resourceId;
     }
@@ -5590,10 +5515,6 @@ export const PaymentsSyncRequest: MessageFns<PaymentsSyncRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<PaymentsSyncRequest>, I>>(object: I): PaymentsSyncRequest {
     const message = createBasePaymentsSyncRequest();
-    message.connector = object.connector ?? 0;
-    message.authCreds = (object.authCreds !== undefined && object.authCreds !== null)
-      ? AuthType.fromPartial(object.authCreds)
-      : undefined;
     message.resourceId = object.resourceId ?? "";
     message.connectorRequestReferenceId = object.connectorRequestReferenceId ?? undefined;
     return message;
@@ -5771,23 +5692,11 @@ export const PaymentsSyncResponse: MessageFns<PaymentsSyncResponse> = {
 };
 
 function createBaseRefundsSyncRequest(): RefundsSyncRequest {
-  return {
-    connector: 0,
-    authCreds: undefined,
-    connectorRefundId: "",
-    connectorTransactionId: "",
-    refundReason: undefined,
-  };
+  return { connectorRefundId: "", connectorTransactionId: "", refundReason: undefined };
 }
 
 export const RefundsSyncRequest: MessageFns<RefundsSyncRequest> = {
   encode(message: RefundsSyncRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.connector !== 0) {
-      writer.uint32(280).int32(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      AuthType.encode(message.authCreds, writer.uint32(274).fork()).join();
-    }
     if (message.connectorRefundId !== "") {
       writer.uint32(18).string(message.connectorRefundId);
     }
@@ -5807,22 +5716,6 @@ export const RefundsSyncRequest: MessageFns<RefundsSyncRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 35: {
-          if (tag !== 280) {
-            break;
-          }
-
-          message.connector = reader.int32() as any;
-          continue;
-        }
-        case 34: {
-          if (tag !== 274) {
-            break;
-          }
-
-          message.authCreds = AuthType.decode(reader, reader.uint32());
-          continue;
-        }
         case 2: {
           if (tag !== 18) {
             break;
@@ -5858,8 +5751,6 @@ export const RefundsSyncRequest: MessageFns<RefundsSyncRequest> = {
 
   fromJSON(object: any): RefundsSyncRequest {
     return {
-      connector: isSet(object.connector) ? connectorFromJSON(object.connector) : 0,
-      authCreds: isSet(object.authCreds) ? AuthType.fromJSON(object.authCreds) : undefined,
       connectorRefundId: isSet(object.connectorRefundId) ? globalThis.String(object.connectorRefundId) : "",
       connectorTransactionId: isSet(object.connectorTransactionId)
         ? globalThis.String(object.connectorTransactionId)
@@ -5870,12 +5761,6 @@ export const RefundsSyncRequest: MessageFns<RefundsSyncRequest> = {
 
   toJSON(message: RefundsSyncRequest): unknown {
     const obj: any = {};
-    if (message.connector !== 0) {
-      obj.connector = connectorToJSON(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      obj.authCreds = AuthType.toJSON(message.authCreds);
-    }
     if (message.connectorRefundId !== "") {
       obj.connectorRefundId = message.connectorRefundId;
     }
@@ -5893,10 +5778,6 @@ export const RefundsSyncRequest: MessageFns<RefundsSyncRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<RefundsSyncRequest>, I>>(object: I): RefundsSyncRequest {
     const message = createBaseRefundsSyncRequest();
-    message.connector = object.connector ?? 0;
-    message.authCreds = (object.authCreds !== undefined && object.authCreds !== null)
-      ? AuthType.fromPartial(object.authCreds)
-      : undefined;
     message.connectorRefundId = object.connectorRefundId ?? "";
     message.connectorTransactionId = object.connectorTransactionId ?? "";
     message.refundReason = object.refundReason ?? undefined;
@@ -6036,23 +5917,229 @@ export const RefundsSyncResponse: MessageFns<RefundsSyncResponse> = {
   },
 };
 
+function createBasePaymentsVoidRequest(): PaymentsVoidRequest {
+  return { connectorRequestReferenceId: "", cancellationReason: undefined };
+}
+
+export const PaymentsVoidRequest: MessageFns<PaymentsVoidRequest> = {
+  encode(message: PaymentsVoidRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.connectorRequestReferenceId !== "") {
+      writer.uint32(18).string(message.connectorRequestReferenceId);
+    }
+    if (message.cancellationReason !== undefined) {
+      writer.uint32(10).string(message.cancellationReason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PaymentsVoidRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePaymentsVoidRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.connectorRequestReferenceId = reader.string();
+          continue;
+        }
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.cancellationReason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PaymentsVoidRequest {
+    return {
+      connectorRequestReferenceId: isSet(object.connectorRequestReferenceId)
+        ? globalThis.String(object.connectorRequestReferenceId)
+        : "",
+      cancellationReason: isSet(object.cancellationReason) ? globalThis.String(object.cancellationReason) : undefined,
+    };
+  },
+
+  toJSON(message: PaymentsVoidRequest): unknown {
+    const obj: any = {};
+    if (message.connectorRequestReferenceId !== "") {
+      obj.connectorRequestReferenceId = message.connectorRequestReferenceId;
+    }
+    if (message.cancellationReason !== undefined) {
+      obj.cancellationReason = message.cancellationReason;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PaymentsVoidRequest>, I>>(base?: I): PaymentsVoidRequest {
+    return PaymentsVoidRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PaymentsVoidRequest>, I>>(object: I): PaymentsVoidRequest {
+    const message = createBasePaymentsVoidRequest();
+    message.connectorRequestReferenceId = object.connectorRequestReferenceId ?? "";
+    message.cancellationReason = object.cancellationReason ?? undefined;
+    return message;
+  },
+};
+
+function createBasePaymentsVoidResponse(): PaymentsVoidResponse {
+  return {
+    resourceId: undefined,
+    connectorResponseReferenceId: undefined,
+    status: 0,
+    errorCode: undefined,
+    errorMessage: undefined,
+  };
+}
+
+export const PaymentsVoidResponse: MessageFns<PaymentsVoidResponse> = {
+  encode(message: PaymentsVoidResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resourceId !== undefined) {
+      ResponseId.encode(message.resourceId, writer.uint32(10).fork()).join();
+    }
+    if (message.connectorResponseReferenceId !== undefined) {
+      writer.uint32(26).string(message.connectorResponseReferenceId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(64).int32(message.status);
+    }
+    if (message.errorCode !== undefined) {
+      writer.uint32(34).string(message.errorCode);
+    }
+    if (message.errorMessage !== undefined) {
+      writer.uint32(42).string(message.errorMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PaymentsVoidResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePaymentsVoidResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.resourceId = ResponseId.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.connectorResponseReferenceId = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.errorCode = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.errorMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PaymentsVoidResponse {
+    return {
+      resourceId: isSet(object.resourceId) ? ResponseId.fromJSON(object.resourceId) : undefined,
+      connectorResponseReferenceId: isSet(object.connectorResponseReferenceId)
+        ? globalThis.String(object.connectorResponseReferenceId)
+        : undefined,
+      status: isSet(object.status) ? attemptStatusFromJSON(object.status) : 0,
+      errorCode: isSet(object.errorCode) ? globalThis.String(object.errorCode) : undefined,
+      errorMessage: isSet(object.errorMessage) ? globalThis.String(object.errorMessage) : undefined,
+    };
+  },
+
+  toJSON(message: PaymentsVoidResponse): unknown {
+    const obj: any = {};
+    if (message.resourceId !== undefined) {
+      obj.resourceId = ResponseId.toJSON(message.resourceId);
+    }
+    if (message.connectorResponseReferenceId !== undefined) {
+      obj.connectorResponseReferenceId = message.connectorResponseReferenceId;
+    }
+    if (message.status !== 0) {
+      obj.status = attemptStatusToJSON(message.status);
+    }
+    if (message.errorCode !== undefined) {
+      obj.errorCode = message.errorCode;
+    }
+    if (message.errorMessage !== undefined) {
+      obj.errorMessage = message.errorMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PaymentsVoidResponse>, I>>(base?: I): PaymentsVoidResponse {
+    return PaymentsVoidResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PaymentsVoidResponse>, I>>(object: I): PaymentsVoidResponse {
+    const message = createBasePaymentsVoidResponse();
+    message.resourceId = (object.resourceId !== undefined && object.resourceId !== null)
+      ? ResponseId.fromPartial(object.resourceId)
+      : undefined;
+    message.connectorResponseReferenceId = object.connectorResponseReferenceId ?? undefined;
+    message.status = object.status ?? 0;
+    message.errorCode = object.errorCode ?? undefined;
+    message.errorMessage = object.errorMessage ?? undefined;
+    return message;
+  },
+};
+
 function createBaseIncomingWebhookRequest(): IncomingWebhookRequest {
-  return { connector: 0, requestDetails: undefined, webhookSecrets: undefined, authCreds: undefined };
+  return { requestDetails: undefined, webhookSecrets: undefined };
 }
 
 export const IncomingWebhookRequest: MessageFns<IncomingWebhookRequest> = {
   encode(message: IncomingWebhookRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.connector !== 0) {
-      writer.uint32(8).int32(message.connector);
-    }
     if (message.requestDetails !== undefined) {
       RequestDetails.encode(message.requestDetails, writer.uint32(18).fork()).join();
     }
     if (message.webhookSecrets !== undefined) {
       ConnectorWebhookSecrets.encode(message.webhookSecrets, writer.uint32(26).fork()).join();
-    }
-    if (message.authCreds !== undefined) {
-      AuthType.encode(message.authCreds, writer.uint32(274).fork()).join();
     }
     return writer;
   },
@@ -6064,14 +6151,6 @@ export const IncomingWebhookRequest: MessageFns<IncomingWebhookRequest> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 8) {
-            break;
-          }
-
-          message.connector = reader.int32() as any;
-          continue;
-        }
         case 2: {
           if (tag !== 18) {
             break;
@@ -6088,14 +6167,6 @@ export const IncomingWebhookRequest: MessageFns<IncomingWebhookRequest> = {
           message.webhookSecrets = ConnectorWebhookSecrets.decode(reader, reader.uint32());
           continue;
         }
-        case 34: {
-          if (tag !== 274) {
-            break;
-          }
-
-          message.authCreds = AuthType.decode(reader, reader.uint32());
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6107,28 +6178,20 @@ export const IncomingWebhookRequest: MessageFns<IncomingWebhookRequest> = {
 
   fromJSON(object: any): IncomingWebhookRequest {
     return {
-      connector: isSet(object.connector) ? connectorFromJSON(object.connector) : 0,
       requestDetails: isSet(object.requestDetails) ? RequestDetails.fromJSON(object.requestDetails) : undefined,
       webhookSecrets: isSet(object.webhookSecrets)
         ? ConnectorWebhookSecrets.fromJSON(object.webhookSecrets)
         : undefined,
-      authCreds: isSet(object.authCreds) ? AuthType.fromJSON(object.authCreds) : undefined,
     };
   },
 
   toJSON(message: IncomingWebhookRequest): unknown {
     const obj: any = {};
-    if (message.connector !== 0) {
-      obj.connector = connectorToJSON(message.connector);
-    }
     if (message.requestDetails !== undefined) {
       obj.requestDetails = RequestDetails.toJSON(message.requestDetails);
     }
     if (message.webhookSecrets !== undefined) {
       obj.webhookSecrets = ConnectorWebhookSecrets.toJSON(message.webhookSecrets);
-    }
-    if (message.authCreds !== undefined) {
-      obj.authCreds = AuthType.toJSON(message.authCreds);
     }
     return obj;
   },
@@ -6138,15 +6201,11 @@ export const IncomingWebhookRequest: MessageFns<IncomingWebhookRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<IncomingWebhookRequest>, I>>(object: I): IncomingWebhookRequest {
     const message = createBaseIncomingWebhookRequest();
-    message.connector = object.connector ?? 0;
     message.requestDetails = (object.requestDetails !== undefined && object.requestDetails !== null)
       ? RequestDetails.fromPartial(object.requestDetails)
       : undefined;
     message.webhookSecrets = (object.webhookSecrets !== undefined && object.webhookSecrets !== null)
       ? ConnectorWebhookSecrets.fromPartial(object.webhookSecrets)
-      : undefined;
-    message.authCreds = (object.authCreds !== undefined && object.authCreds !== null)
-      ? AuthType.fromPartial(object.authCreds)
       : undefined;
     return message;
   },
@@ -6247,13 +6306,16 @@ export const IncomingWebhookResponse: MessageFns<IncomingWebhookResponse> = {
 };
 
 function createBaseWebhookResponseContent(): WebhookResponseContent {
-  return { paymentsResponse: undefined };
+  return { paymentsResponse: undefined, refundsResponse: undefined };
 }
 
 export const WebhookResponseContent: MessageFns<WebhookResponseContent> = {
   encode(message: WebhookResponseContent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.paymentsResponse !== undefined) {
       PaymentsSyncResponse.encode(message.paymentsResponse, writer.uint32(10).fork()).join();
+    }
+    if (message.refundsResponse !== undefined) {
+      RefundsSyncResponse.encode(message.refundsResponse, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -6273,6 +6335,14 @@ export const WebhookResponseContent: MessageFns<WebhookResponseContent> = {
           message.paymentsResponse = PaymentsSyncResponse.decode(reader, reader.uint32());
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.refundsResponse = RefundsSyncResponse.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6287,6 +6357,7 @@ export const WebhookResponseContent: MessageFns<WebhookResponseContent> = {
       paymentsResponse: isSet(object.paymentsResponse)
         ? PaymentsSyncResponse.fromJSON(object.paymentsResponse)
         : undefined,
+      refundsResponse: isSet(object.refundsResponse) ? RefundsSyncResponse.fromJSON(object.refundsResponse) : undefined,
     };
   },
 
@@ -6294,6 +6365,9 @@ export const WebhookResponseContent: MessageFns<WebhookResponseContent> = {
     const obj: any = {};
     if (message.paymentsResponse !== undefined) {
       obj.paymentsResponse = PaymentsSyncResponse.toJSON(message.paymentsResponse);
+    }
+    if (message.refundsResponse !== undefined) {
+      obj.refundsResponse = RefundsSyncResponse.toJSON(message.refundsResponse);
     }
     return obj;
   },
@@ -6305,6 +6379,9 @@ export const WebhookResponseContent: MessageFns<WebhookResponseContent> = {
     const message = createBaseWebhookResponseContent();
     message.paymentsResponse = (object.paymentsResponse !== undefined && object.paymentsResponse !== null)
       ? PaymentsSyncResponse.fromPartial(object.paymentsResponse)
+      : undefined;
+    message.refundsResponse = (object.refundsResponse !== undefined && object.refundsResponse !== null)
+      ? RefundsSyncResponse.fromPartial(object.refundsResponse)
       : undefined;
     return message;
   },
@@ -6608,8 +6685,6 @@ export const ConnectorWebhookSecrets: MessageFns<ConnectorWebhookSecrets> = {
 function createBaseRefundsRequest(): RefundsRequest {
   return {
     refundId: "",
-    connector: 0,
-    authCreds: undefined,
     connectorTransactionId: "",
     connectorRefundId: undefined,
     currency: 0,
@@ -6631,12 +6706,6 @@ export const RefundsRequest: MessageFns<RefundsRequest> = {
   encode(message: RefundsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.refundId !== "") {
       writer.uint32(10).string(message.refundId);
-    }
-    if (message.connector !== 0) {
-      writer.uint32(280).int32(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      AuthType.encode(message.authCreds, writer.uint32(274).fork()).join();
     }
     if (message.connectorTransactionId !== "") {
       writer.uint32(18).string(message.connectorTransactionId);
@@ -6696,22 +6765,6 @@ export const RefundsRequest: MessageFns<RefundsRequest> = {
           }
 
           message.refundId = reader.string();
-          continue;
-        }
-        case 35: {
-          if (tag !== 280) {
-            break;
-          }
-
-          message.connector = reader.int32() as any;
-          continue;
-        }
-        case 34: {
-          if (tag !== 274) {
-            break;
-          }
-
-          message.authCreds = AuthType.decode(reader, reader.uint32());
           continue;
         }
         case 2: {
@@ -6838,8 +6891,6 @@ export const RefundsRequest: MessageFns<RefundsRequest> = {
   fromJSON(object: any): RefundsRequest {
     return {
       refundId: isSet(object.refundId) ? globalThis.String(object.refundId) : "",
-      connector: isSet(object.connector) ? connectorFromJSON(object.connector) : 0,
-      authCreds: isSet(object.authCreds) ? AuthType.fromJSON(object.authCreds) : undefined,
       connectorTransactionId: isSet(object.connectorTransactionId)
         ? globalThis.String(object.connectorTransactionId)
         : "",
@@ -6865,12 +6916,6 @@ export const RefundsRequest: MessageFns<RefundsRequest> = {
     const obj: any = {};
     if (message.refundId !== "") {
       obj.refundId = message.refundId;
-    }
-    if (message.connector !== 0) {
-      obj.connector = connectorToJSON(message.connector);
-    }
-    if (message.authCreds !== undefined) {
-      obj.authCreds = AuthType.toJSON(message.authCreds);
     }
     if (message.connectorTransactionId !== "") {
       obj.connectorTransactionId = message.connectorTransactionId;
@@ -6923,10 +6968,6 @@ export const RefundsRequest: MessageFns<RefundsRequest> = {
   fromPartial<I extends Exact<DeepPartial<RefundsRequest>, I>>(object: I): RefundsRequest {
     const message = createBaseRefundsRequest();
     message.refundId = object.refundId ?? "";
-    message.connector = object.connector ?? 0;
-    message.authCreds = (object.authCreds !== undefined && object.authCreds !== null)
-      ? AuthType.fromPartial(object.authCreds)
-      : undefined;
     message.connectorTransactionId = object.connectorTransactionId ?? "";
     message.connectorRefundId = object.connectorRefundId ?? undefined;
     message.currency = object.currency ?? 0;
@@ -7051,573 +7092,6 @@ export const RefundsResponse: MessageFns<RefundsResponse> = {
     message.refundStatus = object.refundStatus ?? 0;
     message.errorCode = object.errorCode ?? undefined;
     message.errorMessage = object.errorMessage ?? undefined;
-    return message;
-  },
-};
-
-function createBaseAuthType(): AuthType {
-  return {
-    headerKey: undefined,
-    bodyKey: undefined,
-    signatureKey: undefined,
-    multiAuthKey: undefined,
-    certificateAuth: undefined,
-    noKey: undefined,
-  };
-}
-
-export const AuthType: MessageFns<AuthType> = {
-  encode(message: AuthType, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.headerKey !== undefined) {
-      HeaderKey.encode(message.headerKey, writer.uint32(10).fork()).join();
-    }
-    if (message.bodyKey !== undefined) {
-      BodyKey.encode(message.bodyKey, writer.uint32(18).fork()).join();
-    }
-    if (message.signatureKey !== undefined) {
-      SignatureKey.encode(message.signatureKey, writer.uint32(26).fork()).join();
-    }
-    if (message.multiAuthKey !== undefined) {
-      MultiAuthKey.encode(message.multiAuthKey, writer.uint32(34).fork()).join();
-    }
-    if (message.certificateAuth !== undefined) {
-      CertificateAuth.encode(message.certificateAuth, writer.uint32(42).fork()).join();
-    }
-    if (message.noKey !== undefined) {
-      writer.uint32(48).bool(message.noKey);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): AuthType {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseAuthType();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.headerKey = HeaderKey.decode(reader, reader.uint32());
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.bodyKey = BodyKey.decode(reader, reader.uint32());
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
-            break;
-          }
-
-          message.signatureKey = SignatureKey.decode(reader, reader.uint32());
-          continue;
-        }
-        case 4: {
-          if (tag !== 34) {
-            break;
-          }
-
-          message.multiAuthKey = MultiAuthKey.decode(reader, reader.uint32());
-          continue;
-        }
-        case 5: {
-          if (tag !== 42) {
-            break;
-          }
-
-          message.certificateAuth = CertificateAuth.decode(reader, reader.uint32());
-          continue;
-        }
-        case 6: {
-          if (tag !== 48) {
-            break;
-          }
-
-          message.noKey = reader.bool();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): AuthType {
-    return {
-      headerKey: isSet(object.headerKey) ? HeaderKey.fromJSON(object.headerKey) : undefined,
-      bodyKey: isSet(object.bodyKey) ? BodyKey.fromJSON(object.bodyKey) : undefined,
-      signatureKey: isSet(object.signatureKey) ? SignatureKey.fromJSON(object.signatureKey) : undefined,
-      multiAuthKey: isSet(object.multiAuthKey) ? MultiAuthKey.fromJSON(object.multiAuthKey) : undefined,
-      certificateAuth: isSet(object.certificateAuth) ? CertificateAuth.fromJSON(object.certificateAuth) : undefined,
-      noKey: isSet(object.noKey) ? globalThis.Boolean(object.noKey) : undefined,
-    };
-  },
-
-  toJSON(message: AuthType): unknown {
-    const obj: any = {};
-    if (message.headerKey !== undefined) {
-      obj.headerKey = HeaderKey.toJSON(message.headerKey);
-    }
-    if (message.bodyKey !== undefined) {
-      obj.bodyKey = BodyKey.toJSON(message.bodyKey);
-    }
-    if (message.signatureKey !== undefined) {
-      obj.signatureKey = SignatureKey.toJSON(message.signatureKey);
-    }
-    if (message.multiAuthKey !== undefined) {
-      obj.multiAuthKey = MultiAuthKey.toJSON(message.multiAuthKey);
-    }
-    if (message.certificateAuth !== undefined) {
-      obj.certificateAuth = CertificateAuth.toJSON(message.certificateAuth);
-    }
-    if (message.noKey !== undefined) {
-      obj.noKey = message.noKey;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<AuthType>, I>>(base?: I): AuthType {
-    return AuthType.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<AuthType>, I>>(object: I): AuthType {
-    const message = createBaseAuthType();
-    message.headerKey = (object.headerKey !== undefined && object.headerKey !== null)
-      ? HeaderKey.fromPartial(object.headerKey)
-      : undefined;
-    message.bodyKey = (object.bodyKey !== undefined && object.bodyKey !== null)
-      ? BodyKey.fromPartial(object.bodyKey)
-      : undefined;
-    message.signatureKey = (object.signatureKey !== undefined && object.signatureKey !== null)
-      ? SignatureKey.fromPartial(object.signatureKey)
-      : undefined;
-    message.multiAuthKey = (object.multiAuthKey !== undefined && object.multiAuthKey !== null)
-      ? MultiAuthKey.fromPartial(object.multiAuthKey)
-      : undefined;
-    message.certificateAuth = (object.certificateAuth !== undefined && object.certificateAuth !== null)
-      ? CertificateAuth.fromPartial(object.certificateAuth)
-      : undefined;
-    message.noKey = object.noKey ?? undefined;
-    return message;
-  },
-};
-
-function createBaseHeaderKey(): HeaderKey {
-  return { apiKey: "" };
-}
-
-export const HeaderKey: MessageFns<HeaderKey> = {
-  encode(message: HeaderKey, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.apiKey !== "") {
-      writer.uint32(10).string(message.apiKey);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): HeaderKey {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseHeaderKey();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.apiKey = reader.string();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): HeaderKey {
-    return { apiKey: isSet(object.apiKey) ? globalThis.String(object.apiKey) : "" };
-  },
-
-  toJSON(message: HeaderKey): unknown {
-    const obj: any = {};
-    if (message.apiKey !== "") {
-      obj.apiKey = message.apiKey;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<HeaderKey>, I>>(base?: I): HeaderKey {
-    return HeaderKey.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<HeaderKey>, I>>(object: I): HeaderKey {
-    const message = createBaseHeaderKey();
-    message.apiKey = object.apiKey ?? "";
-    return message;
-  },
-};
-
-function createBaseBodyKey(): BodyKey {
-  return { apiKey: "", key1: "" };
-}
-
-export const BodyKey: MessageFns<BodyKey> = {
-  encode(message: BodyKey, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.apiKey !== "") {
-      writer.uint32(10).string(message.apiKey);
-    }
-    if (message.key1 !== "") {
-      writer.uint32(18).string(message.key1);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): BodyKey {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseBodyKey();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.apiKey = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.key1 = reader.string();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): BodyKey {
-    return {
-      apiKey: isSet(object.apiKey) ? globalThis.String(object.apiKey) : "",
-      key1: isSet(object.key1) ? globalThis.String(object.key1) : "",
-    };
-  },
-
-  toJSON(message: BodyKey): unknown {
-    const obj: any = {};
-    if (message.apiKey !== "") {
-      obj.apiKey = message.apiKey;
-    }
-    if (message.key1 !== "") {
-      obj.key1 = message.key1;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<BodyKey>, I>>(base?: I): BodyKey {
-    return BodyKey.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<BodyKey>, I>>(object: I): BodyKey {
-    const message = createBaseBodyKey();
-    message.apiKey = object.apiKey ?? "";
-    message.key1 = object.key1 ?? "";
-    return message;
-  },
-};
-
-function createBaseSignatureKey(): SignatureKey {
-  return { apiKey: "", key1: "", apiSecret: "" };
-}
-
-export const SignatureKey: MessageFns<SignatureKey> = {
-  encode(message: SignatureKey, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.apiKey !== "") {
-      writer.uint32(10).string(message.apiKey);
-    }
-    if (message.key1 !== "") {
-      writer.uint32(18).string(message.key1);
-    }
-    if (message.apiSecret !== "") {
-      writer.uint32(26).string(message.apiSecret);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): SignatureKey {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseSignatureKey();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.apiKey = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.key1 = reader.string();
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
-            break;
-          }
-
-          message.apiSecret = reader.string();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): SignatureKey {
-    return {
-      apiKey: isSet(object.apiKey) ? globalThis.String(object.apiKey) : "",
-      key1: isSet(object.key1) ? globalThis.String(object.key1) : "",
-      apiSecret: isSet(object.apiSecret) ? globalThis.String(object.apiSecret) : "",
-    };
-  },
-
-  toJSON(message: SignatureKey): unknown {
-    const obj: any = {};
-    if (message.apiKey !== "") {
-      obj.apiKey = message.apiKey;
-    }
-    if (message.key1 !== "") {
-      obj.key1 = message.key1;
-    }
-    if (message.apiSecret !== "") {
-      obj.apiSecret = message.apiSecret;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<SignatureKey>, I>>(base?: I): SignatureKey {
-    return SignatureKey.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<SignatureKey>, I>>(object: I): SignatureKey {
-    const message = createBaseSignatureKey();
-    message.apiKey = object.apiKey ?? "";
-    message.key1 = object.key1 ?? "";
-    message.apiSecret = object.apiSecret ?? "";
-    return message;
-  },
-};
-
-function createBaseMultiAuthKey(): MultiAuthKey {
-  return { apiKey: "", key1: "", apiSecret: "", key2: "" };
-}
-
-export const MultiAuthKey: MessageFns<MultiAuthKey> = {
-  encode(message: MultiAuthKey, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.apiKey !== "") {
-      writer.uint32(10).string(message.apiKey);
-    }
-    if (message.key1 !== "") {
-      writer.uint32(18).string(message.key1);
-    }
-    if (message.apiSecret !== "") {
-      writer.uint32(26).string(message.apiSecret);
-    }
-    if (message.key2 !== "") {
-      writer.uint32(34).string(message.key2);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): MultiAuthKey {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseMultiAuthKey();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.apiKey = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.key1 = reader.string();
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
-            break;
-          }
-
-          message.apiSecret = reader.string();
-          continue;
-        }
-        case 4: {
-          if (tag !== 34) {
-            break;
-          }
-
-          message.key2 = reader.string();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): MultiAuthKey {
-    return {
-      apiKey: isSet(object.apiKey) ? globalThis.String(object.apiKey) : "",
-      key1: isSet(object.key1) ? globalThis.String(object.key1) : "",
-      apiSecret: isSet(object.apiSecret) ? globalThis.String(object.apiSecret) : "",
-      key2: isSet(object.key2) ? globalThis.String(object.key2) : "",
-    };
-  },
-
-  toJSON(message: MultiAuthKey): unknown {
-    const obj: any = {};
-    if (message.apiKey !== "") {
-      obj.apiKey = message.apiKey;
-    }
-    if (message.key1 !== "") {
-      obj.key1 = message.key1;
-    }
-    if (message.apiSecret !== "") {
-      obj.apiSecret = message.apiSecret;
-    }
-    if (message.key2 !== "") {
-      obj.key2 = message.key2;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<MultiAuthKey>, I>>(base?: I): MultiAuthKey {
-    return MultiAuthKey.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<MultiAuthKey>, I>>(object: I): MultiAuthKey {
-    const message = createBaseMultiAuthKey();
-    message.apiKey = object.apiKey ?? "";
-    message.key1 = object.key1 ?? "";
-    message.apiSecret = object.apiSecret ?? "";
-    message.key2 = object.key2 ?? "";
-    return message;
-  },
-};
-
-function createBaseCertificateAuth(): CertificateAuth {
-  return { certificate: "", privateKey: "" };
-}
-
-export const CertificateAuth: MessageFns<CertificateAuth> = {
-  encode(message: CertificateAuth, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.certificate !== "") {
-      writer.uint32(10).string(message.certificate);
-    }
-    if (message.privateKey !== "") {
-      writer.uint32(18).string(message.privateKey);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): CertificateAuth {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseCertificateAuth();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.certificate = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.privateKey = reader.string();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): CertificateAuth {
-    return {
-      certificate: isSet(object.certificate) ? globalThis.String(object.certificate) : "",
-      privateKey: isSet(object.privateKey) ? globalThis.String(object.privateKey) : "",
-    };
-  },
-
-  toJSON(message: CertificateAuth): unknown {
-    const obj: any = {};
-    if (message.certificate !== "") {
-      obj.certificate = message.certificate;
-    }
-    if (message.privateKey !== "") {
-      obj.privateKey = message.privateKey;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<CertificateAuth>, I>>(base?: I): CertificateAuth {
-    return CertificateAuth.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<CertificateAuth>, I>>(object: I): CertificateAuth {
-    const message = createBaseCertificateAuth();
-    message.certificate = object.certificate ?? "";
-    message.privateKey = object.privateKey ?? "";
     return message;
   },
 };
@@ -9605,6 +9079,352 @@ export const PaymentMethodToken: MessageFns<PaymentMethodToken> = {
   },
 };
 
+function createBaseMultipleCaptureRequestData(): MultipleCaptureRequestData {
+  return { captureSequence: 0, captureReference: "" };
+}
+
+export const MultipleCaptureRequestData: MessageFns<MultipleCaptureRequestData> = {
+  encode(message: MultipleCaptureRequestData, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.captureSequence !== 0) {
+      writer.uint32(16).int64(message.captureSequence);
+    }
+    if (message.captureReference !== "") {
+      writer.uint32(34).string(message.captureReference);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MultipleCaptureRequestData {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMultipleCaptureRequestData();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.captureSequence = longToNumber(reader.int64());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.captureReference = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MultipleCaptureRequestData {
+    return {
+      captureSequence: isSet(object.captureSequence) ? globalThis.Number(object.captureSequence) : 0,
+      captureReference: isSet(object.captureReference) ? globalThis.String(object.captureReference) : "",
+    };
+  },
+
+  toJSON(message: MultipleCaptureRequestData): unknown {
+    const obj: any = {};
+    if (message.captureSequence !== 0) {
+      obj.captureSequence = Math.round(message.captureSequence);
+    }
+    if (message.captureReference !== "") {
+      obj.captureReference = message.captureReference;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MultipleCaptureRequestData>, I>>(base?: I): MultipleCaptureRequestData {
+    return MultipleCaptureRequestData.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MultipleCaptureRequestData>, I>>(object: I): MultipleCaptureRequestData {
+    const message = createBaseMultipleCaptureRequestData();
+    message.captureSequence = object.captureSequence ?? 0;
+    message.captureReference = object.captureReference ?? "";
+    return message;
+  },
+};
+
+function createBasePaymentsCaptureRequest(): PaymentsCaptureRequest {
+  return {
+    connectorTransactionId: "",
+    amountToCapture: 0,
+    currency: 0,
+    multipleCaptureData: undefined,
+    connectorMetaData: undefined,
+  };
+}
+
+export const PaymentsCaptureRequest: MessageFns<PaymentsCaptureRequest> = {
+  encode(message: PaymentsCaptureRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.connectorTransactionId !== "") {
+      writer.uint32(10).string(message.connectorTransactionId);
+    }
+    if (message.amountToCapture !== 0) {
+      writer.uint32(16).int64(message.amountToCapture);
+    }
+    if (message.currency !== 0) {
+      writer.uint32(120).int32(message.currency);
+    }
+    if (message.multipleCaptureData !== undefined) {
+      MultipleCaptureRequestData.encode(message.multipleCaptureData, writer.uint32(170).fork()).join();
+    }
+    if (message.connectorMetaData !== undefined) {
+      writer.uint32(26).bytes(message.connectorMetaData);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PaymentsCaptureRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePaymentsCaptureRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.connectorTransactionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.amountToCapture = longToNumber(reader.int64());
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.currency = reader.int32() as any;
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.multipleCaptureData = MultipleCaptureRequestData.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.connectorMetaData = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PaymentsCaptureRequest {
+    return {
+      connectorTransactionId: isSet(object.connectorTransactionId)
+        ? globalThis.String(object.connectorTransactionId)
+        : "",
+      amountToCapture: isSet(object.amountToCapture) ? globalThis.Number(object.amountToCapture) : 0,
+      currency: isSet(object.currency) ? currencyFromJSON(object.currency) : 0,
+      multipleCaptureData: isSet(object.multipleCaptureData)
+        ? MultipleCaptureRequestData.fromJSON(object.multipleCaptureData)
+        : undefined,
+      connectorMetaData: isSet(object.connectorMetaData) ? bytesFromBase64(object.connectorMetaData) : undefined,
+    };
+  },
+
+  toJSON(message: PaymentsCaptureRequest): unknown {
+    const obj: any = {};
+    if (message.connectorTransactionId !== "") {
+      obj.connectorTransactionId = message.connectorTransactionId;
+    }
+    if (message.amountToCapture !== 0) {
+      obj.amountToCapture = Math.round(message.amountToCapture);
+    }
+    if (message.currency !== 0) {
+      obj.currency = currencyToJSON(message.currency);
+    }
+    if (message.multipleCaptureData !== undefined) {
+      obj.multipleCaptureData = MultipleCaptureRequestData.toJSON(message.multipleCaptureData);
+    }
+    if (message.connectorMetaData !== undefined) {
+      obj.connectorMetaData = base64FromBytes(message.connectorMetaData);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PaymentsCaptureRequest>, I>>(base?: I): PaymentsCaptureRequest {
+    return PaymentsCaptureRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PaymentsCaptureRequest>, I>>(object: I): PaymentsCaptureRequest {
+    const message = createBasePaymentsCaptureRequest();
+    message.connectorTransactionId = object.connectorTransactionId ?? "";
+    message.amountToCapture = object.amountToCapture ?? 0;
+    message.currency = object.currency ?? 0;
+    message.multipleCaptureData = (object.multipleCaptureData !== undefined && object.multipleCaptureData !== null)
+      ? MultipleCaptureRequestData.fromPartial(object.multipleCaptureData)
+      : undefined;
+    message.connectorMetaData = object.connectorMetaData ?? undefined;
+    return message;
+  },
+};
+
+function createBasePaymentsCaptureResponse(): PaymentsCaptureResponse {
+  return {
+    resourceId: undefined,
+    connectorResponseReferenceId: undefined,
+    status: 0,
+    errorCode: undefined,
+    errorMessage: undefined,
+  };
+}
+
+export const PaymentsCaptureResponse: MessageFns<PaymentsCaptureResponse> = {
+  encode(message: PaymentsCaptureResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resourceId !== undefined) {
+      ResponseId.encode(message.resourceId, writer.uint32(10).fork()).join();
+    }
+    if (message.connectorResponseReferenceId !== undefined) {
+      writer.uint32(18).string(message.connectorResponseReferenceId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(64).int32(message.status);
+    }
+    if (message.errorCode !== undefined) {
+      writer.uint32(26).string(message.errorCode);
+    }
+    if (message.errorMessage !== undefined) {
+      writer.uint32(34).string(message.errorMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PaymentsCaptureResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePaymentsCaptureResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.resourceId = ResponseId.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.connectorResponseReferenceId = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.errorCode = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.errorMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PaymentsCaptureResponse {
+    return {
+      resourceId: isSet(object.resourceId) ? ResponseId.fromJSON(object.resourceId) : undefined,
+      connectorResponseReferenceId: isSet(object.connectorResponseReferenceId)
+        ? globalThis.String(object.connectorResponseReferenceId)
+        : undefined,
+      status: isSet(object.status) ? attemptStatusFromJSON(object.status) : 0,
+      errorCode: isSet(object.errorCode) ? globalThis.String(object.errorCode) : undefined,
+      errorMessage: isSet(object.errorMessage) ? globalThis.String(object.errorMessage) : undefined,
+    };
+  },
+
+  toJSON(message: PaymentsCaptureResponse): unknown {
+    const obj: any = {};
+    if (message.resourceId !== undefined) {
+      obj.resourceId = ResponseId.toJSON(message.resourceId);
+    }
+    if (message.connectorResponseReferenceId !== undefined) {
+      obj.connectorResponseReferenceId = message.connectorResponseReferenceId;
+    }
+    if (message.status !== 0) {
+      obj.status = attemptStatusToJSON(message.status);
+    }
+    if (message.errorCode !== undefined) {
+      obj.errorCode = message.errorCode;
+    }
+    if (message.errorMessage !== undefined) {
+      obj.errorMessage = message.errorMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PaymentsCaptureResponse>, I>>(base?: I): PaymentsCaptureResponse {
+    return PaymentsCaptureResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PaymentsCaptureResponse>, I>>(object: I): PaymentsCaptureResponse {
+    const message = createBasePaymentsCaptureResponse();
+    message.resourceId = (object.resourceId !== undefined && object.resourceId !== null)
+      ? ResponseId.fromPartial(object.resourceId)
+      : undefined;
+    message.connectorResponseReferenceId = object.connectorResponseReferenceId ?? undefined;
+    message.status = object.status ?? 0;
+    message.errorCode = object.errorCode ?? undefined;
+    message.errorMessage = object.errorMessage ?? undefined;
+    return message;
+  },
+};
+
 export type PaymentServiceService = typeof PaymentServiceService;
 export const PaymentServiceService = {
   paymentAuthorize: {
@@ -9635,6 +9455,15 @@ export const PaymentServiceService = {
     responseSerialize: (value: RefundsSyncResponse) => Buffer.from(RefundsSyncResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => RefundsSyncResponse.decode(value),
   },
+  voidPayment: {
+    path: "/ucs.payments.PaymentService/VoidPayment",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: PaymentsVoidRequest) => Buffer.from(PaymentsVoidRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => PaymentsVoidRequest.decode(value),
+    responseSerialize: (value: PaymentsVoidResponse) => Buffer.from(PaymentsVoidResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => PaymentsVoidResponse.decode(value),
+  },
   incomingWebhook: {
     path: "/ucs.payments.PaymentService/IncomingWebhook",
     requestStream: false,
@@ -9653,14 +9482,25 @@ export const PaymentServiceService = {
     responseSerialize: (value: RefundsResponse) => Buffer.from(RefundsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => RefundsResponse.decode(value),
   },
+  paymentCapture: {
+    path: "/ucs.payments.PaymentService/PaymentCapture",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: PaymentsCaptureRequest) => Buffer.from(PaymentsCaptureRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => PaymentsCaptureRequest.decode(value),
+    responseSerialize: (value: PaymentsCaptureResponse) => Buffer.from(PaymentsCaptureResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => PaymentsCaptureResponse.decode(value),
+  },
 } as const;
 
 export interface PaymentServiceServer extends UntypedServiceImplementation {
   paymentAuthorize: handleUnaryCall<PaymentsAuthorizeRequest, PaymentsAuthorizeResponse>;
   paymentSync: handleUnaryCall<PaymentsSyncRequest, PaymentsSyncResponse>;
   refundSync: handleUnaryCall<RefundsSyncRequest, RefundsSyncResponse>;
+  voidPayment: handleUnaryCall<PaymentsVoidRequest, PaymentsVoidResponse>;
   incomingWebhook: handleUnaryCall<IncomingWebhookRequest, IncomingWebhookResponse>;
   refund: handleUnaryCall<RefundsRequest, RefundsResponse>;
+  paymentCapture: handleUnaryCall<PaymentsCaptureRequest, PaymentsCaptureResponse>;
 }
 
 export interface PaymentServiceClient extends Client {
@@ -9709,6 +9549,21 @@ export interface PaymentServiceClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: RefundsSyncResponse) => void,
   ): ClientUnaryCall;
+  voidPayment(
+    request: PaymentsVoidRequest,
+    callback: (error: ServiceError | null, response: PaymentsVoidResponse) => void,
+  ): ClientUnaryCall;
+  voidPayment(
+    request: PaymentsVoidRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: PaymentsVoidResponse) => void,
+  ): ClientUnaryCall;
+  voidPayment(
+    request: PaymentsVoidRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: PaymentsVoidResponse) => void,
+  ): ClientUnaryCall;
   incomingWebhook(
     request: IncomingWebhookRequest,
     callback: (error: ServiceError | null, response: IncomingWebhookResponse) => void,
@@ -9738,6 +9593,21 @@ export interface PaymentServiceClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: RefundsResponse) => void,
+  ): ClientUnaryCall;
+  paymentCapture(
+    request: PaymentsCaptureRequest,
+    callback: (error: ServiceError | null, response: PaymentsCaptureResponse) => void,
+  ): ClientUnaryCall;
+  paymentCapture(
+    request: PaymentsCaptureRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: PaymentsCaptureResponse) => void,
+  ): ClientUnaryCall;
+  paymentCapture(
+    request: PaymentsCaptureRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: PaymentsCaptureResponse) => void,
   ): ClientUnaryCall;
 }
 
