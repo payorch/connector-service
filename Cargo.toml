@@ -4,7 +4,8 @@ members = [
   "backend/grpc-api-types",
   "backend/connector-integration",
   "backend/external-services",
-  "backend/grpc-server"
+  "backend/grpc-server", 
+  "sdk/rust-grpc-client"
 ]
 exclude = [
   "examples/example-rs",
