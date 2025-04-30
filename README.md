@@ -238,19 +238,13 @@ Test the gRPC endpoints using client SDKs or Postman alternatives that support g
     cd connector-service
     ```
 
-3. Compile the project
-
-   ```bash
-   cargo compile
-   ```
-
-4. Build the project
+3. Build the project
 
    ```bash
    cargo build
    ```
 
-5. Start the server
+4. Start the server
    ```bash
    cargo run
    ```
@@ -263,17 +257,52 @@ Test the gRPC endpoints using client SDKs or Postman alternatives that support g
 You can test your gRPC service with a command like this:
 
 ```bash
-grpcurl -plaintext -d '{
-    "connector_request_reference_id": "YOUR_CONNECTOR_REFERENCE_ID",
-    "connector": "ADYEN",
-    "auth_creds": {
-        "signature_key": {
-            "api_key": "CONNECTOR_API_KEY",
-            "key1": "CONNECTOR_KEY`",
-            "api_secret": "CONNECTOR_API_SECRET"
-        }
+grpcurl -plaintext \
+  -H "x-connector: adyen" \
+  -H "x-auth: signature-key" \
+  -H "x-api-key: <API-KEY>" \
+  -H "x-key1: <KEY1>" \
+  -H "x-api-secret: <API-SECRET>" \
+  -d '{
+    "amount": 1000,
+    "connector_customer": "Customer123",
+    "return_url": "https://example.com",
+    "currency": "USD",
+    "email":"example@gmail.com",
+    "payment_method": "CARD",
+    "payment_method_data": {
+      "card": {
+        "card_number": "4111111111111111",
+        "card_exp_month": "03",
+        "card_exp_year": "2030",
+        "card_cvc": "737"
+      }
+    },
+    "address": {
+    "billing": {
+      "phone": {
+        "number": "1234567890",
+        "country_code": "+1"
+      },
+    "email":"example@gmail.com"
+
     }
-}' localhost:8000 ucs.payments.PaymentService/VoidPayment
+  },
+    "auth_type": "THREE_DS",
+    "connector_request_reference_id": "ref_12345",
+    "enrolled_for_3ds": true,
+    "request_incremental_authorization": false,
+    "minor_amount": 1000,
+    "browser_info": {
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "accept_header": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "language": "en-US",
+      "color_depth": 24,
+      "screen_height": 1080,
+      "screen_width": 1920,
+      "java_enabled": false
+    }
+  }' localhost:8000 ucs.payments.PaymentService/PaymentAuthorize
 ```
 
 The final part of the command — **localhost:8000 ucs.payments.PaymentService/VoidPayment** — corresponds to the **VoidPayment** RPC defined in your **payment.proto** file. Depending on which RPC method you want to invoke, you can replace **VoidPayment** with any of the following method names defined under PaymentService.
