@@ -3549,6 +3549,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-grpc-client"
+version = "0.1.0"
+dependencies = [
+ "grpc-api-types",
+]
+
+[[package]]
 name = "rust-ini"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
