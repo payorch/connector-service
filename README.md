@@ -305,9 +305,9 @@ grpcurl -plaintext \
   }' localhost:8000 ucs.payments.PaymentService/PaymentAuthorize
 ```
 
-The final part of the command — **localhost:8000 ucs.payments.PaymentService/VoidPayment** — corresponds to the **VoidPayment** RPC defined in your **payment.proto** file. Depending on which RPC method you want to invoke, you can replace **VoidPayment** with any of the following method names defined under PaymentService.
+The final part of the command — **localhost:8000 ucs.payments.PaymentService/PaymentAuthorize** — corresponds to the **PaymentAuthorize** RPC defined in your **payment.proto** file. Depending on which RPC method you want to invoke, you can replace **PaymentAuthorize** with any of the following method names defined under PaymentService.
 
-_Note: 💡 Replace all placeholders (YOUR_CONNECTOR_REFERENCE_ID, CONNECTOR_API_KEY, etc.) with actual values for your payments processors._
+_Note: 💡 Replace all placeholders (API-KEY, KEY1, API-SECRET, etc.) with actual values for your payments processors._
 
 
 On running the above grpcURL command, you'll should see a response like the following:
@@ -315,10 +315,11 @@ On running the above grpcURL command, you'll should see a response like the foll
 ```bash
 {
   "resourceId": {
-    "connectorTransactionId": "W6CDD8BLRRRPDKV5"
+    "connectorTransactionId": "RSCB************"
   },
-  "connectorResponseReferenceId": "W6CDD8BLRRRPDKV5",
-  "status": "VOIDED"
+  "networkTxnId": "48318744*******",
+  "connectorResponseReferenceId": "ref_12345",
+  "status": "CHARGED"
 }
 ```
 
