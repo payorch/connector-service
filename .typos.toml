@@ -5,3 +5,6 @@ check-filename = true
 ACI = "ACI" # Name of a connector
 BA = "BA" # Bosnia and Herzegovina country code
 FO = "FO" # Faroe Islands (the) country code
+JOD = "JOD" # Jordan
+PN = "PN" # Pitcairn Islands
+jus = "jus" # Juspay
