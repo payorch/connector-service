@@ -27,6 +27,8 @@ use hyperswitch_domain_models::{
 pub struct Connectors {
     pub adyen: ConnectorParams,
     pub razorpay: ConnectorParams,
+    pub checkout: ConnectorParams,
+    pub paypal: ConnectorParams,
 }
 
 #[derive(Clone, serde::Deserialize, Debug)]

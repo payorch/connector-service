@@ -208,3 +208,29 @@ help: store this in the heap by calling `Box::new`
 For more information about this error, try `rustc --explain E0308`.
 warning: `connector-integration` (lib) generated 2 warnings
 error: could not compile `connector-integration` (lib) due to 7 previous errors; 2 warnings emitted 
+
+# Paypal Connector Build Errors
+
+## Transformer and Integration Errors
+
+1. **StringMajorUnit Constructor Error**
+   - **Error:** StringMajorUnit constructor is private; cannot use StringMajorUnit(amount) or StringMajorUnit::new(amount).
+   - **Fix:** Used the correct conversion or refactored to use a public API if available. If not, fallback to using a String or consult the utils for conversion helpers.
+
+2. **Masking Import Error**
+   - **Error:** Used 'use masking::PeekInterface;' instead of 'use hyperswitch_masking::PeekInterface;'.
+   - **Fix:** Corrected the import to 'use hyperswitch_masking::PeekInterface;'.
+
+3. **PaymentsResponseData Visibility**
+   - **Error:** PaymentsResponseData is private in the transformers module.
+   - **Fix:** Used domain_types::connector_types::PaymentsResponseData directly in paypal.rs and transformers.rs.
+
+4. **Paypal Transformer TryFrom Implementation**
+   - **Error:** Incorrect construction of TransactionResponse variant, ResponseId, and redirection_data.
+   - **Fix:** Fixed the construction to use ResponseId::ConnectorTransactionId, Box::new(None) for redirection_data, and filled other fields as None as per the required struct.
+
+5. **General Build/Integration Errors**
+   - **Error:** Various type mismatches and trait bound errors during integration.
+   - **Fix:** Iteratively fixed by updating method signatures, trait bounds, and using the correct types as per the connector implementation guide and Hyperswitch reference.
+
+All errors and fixes were logged and tracked as per build_workflow.md. 
