@@ -1,5 +1,5 @@
-use crate::{configs, error::ConfigurationError, logger, metrics, utils};
 use crate::consts;
+use crate::{configs, error::ConfigurationError, logger, metrics, utils};
 use axum::http;
 use grpc_api_types::{
     health_check::health_server,
@@ -128,14 +128,14 @@ impl Service {
             MakeRequestUuid,
         );
 
-        let propogate_request_id_layer = tower_http::request_id::PropagateRequestIdLayer::new(
+        let propagate_request_id_layer = tower_http::request_id::PropagateRequestIdLayer::new(
             http::HeaderName::from_static(consts::X_REQUEST_ID),
         );
 
         let router = axum::Router::new()
             .layer(logging_layer)
             .layer(request_id_layer)
-            .layer(propogate_request_id_layer)
+            .layer(propagate_request_id_layer)
             .merge(health_handler(self.health_check_service))
             .merge(payment_service_handler(self.payments_service));
 
@@ -173,19 +173,18 @@ impl Service {
                     .level(tracing::Level::ERROR),
             );
 
-
         let request_id_layer = tower_http::request_id::SetRequestIdLayer::new(
             http::HeaderName::from_static(consts::X_REQUEST_ID),
             MakeRequestUuid,
         );
-        let propogate_request_id_layer = tower_http::request_id::PropagateRequestIdLayer::new(
+        let propagate_request_id_layer = tower_http::request_id::PropagateRequestIdLayer::new(
             http::HeaderName::from_static(consts::X_REQUEST_ID),
         );
 
         Server::builder()
             .layer(logging_layer)
             .layer(request_id_layer)
-            .layer(propogate_request_id_layer)
+            .layer(propagate_request_id_layer)
             .add_service(reflection_service)
             .add_service(health_server::HealthServer::new(self.health_check_service))
             .add_service(payment_service_server::PaymentServiceServer::new(
