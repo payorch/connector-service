@@ -1,7 +1,11 @@
 use serde_json::Value;
 use std::str::FromStr;
 
-use crate::{configs::{Config,ServiceType}, consts, logger::config};
+use crate::{
+    configs::{Config, ServiceType},
+    consts,
+    logger::config,
+};
 use domain_types::connector_types;
 use http::request::Request;
 use hyperswitch_domain_models::router_data::ConnectorAuthType;
@@ -128,15 +132,19 @@ pub fn config_from_metadata(
         }
     }
 
-     // proxy
-     if let Some(proxy) = override_json.get("proxy").and_then(Value::as_object) {
-        if let Some(timeout) = proxy.get("idle_pool_connection_timeout"){
+    // proxy
+    if let Some(proxy) = override_json.get("proxy").and_then(Value::as_object) {
+        if let Some(timeout) = proxy.get("idle_pool_connection_timeout") {
             if let Some(timeout_val) = timeout.as_u64() {
                 config.proxy.idle_pool_connection_timeout = Some(timeout_val);
             }
         }
         if let Some(bypass) = proxy.get("bypass_proxy_urls").and_then(Value::as_array) {
-            let urls = bypass.iter().filter_map(Value::as_str).map(String::from).collect();
+            let urls = bypass
+                .iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect();
             config.proxy.bypass_proxy_urls = urls;
         }
     }
@@ -147,7 +155,7 @@ pub fn config_from_metadata(
             config.metrics.host = host.to_string();
         }
         if let Some(port) = metrics.get("port").and_then(Value::as_u64) {
-            config.metrics.port = port as u16;
+            config.metrics.port = u16::try_from(port).expect("Port number out of range for u16")
         }
     }
 
@@ -157,13 +165,18 @@ pub fn config_from_metadata(
             config.server.host = host.to_string();
         }
         if let Some(port) = server.get("port").and_then(Value::as_u64) {
-            config.server.port = port as u16;
+            config.server.port = u16::try_from(port).expect("Port number out of range for u16")
         }
         if let Some(server_type) = server.get("type").and_then(Value::as_str) {
             config.server.type_ = match server_type {
                 "http" => ServiceType::Http,
                 "https" => ServiceType::Grpc,
-                _ => return Err(tonic::Status::invalid_argument(format!("Invalid server type: {}", server_type))),
+                _ => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid server type: {}",
+                        server_type
+                    )))
+                }
             };
         }
     }
@@ -174,14 +187,18 @@ pub fn config_from_metadata(
             config.log.console.enabled = enabled;
         }
         if let Some(format) = log.get("log_format").and_then(Value::as_str) {
-            config.log.console.log_format = match format{
+            config.log.console.log_format = match format {
                 "json" => config::LogFormat::Json,
                 "default" => config::LogFormat::Default,
-                _ => return Err(tonic::Status::invalid_argument(format!("Invalid log format: {}", format))),
+                _ => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid log format: {}",
+                        format
+                    )))
+                }
             };
         }
     }
-
 
     Ok(config)
 }
