@@ -1,6 +1,6 @@
-use domain_types::connector_types::{BoxedConnector, ConnectorEnum};
+use domain_types::connector_types::{BoxedConnector, ConnectorEnum, ConnectorServiceTrait};
 
-use crate::connectors::{Adyen, Razorpay, Checkout, Paypal, Jpmorgan, Airwallex};
+use crate::connectors::{Adyen, Razorpay, Checkout, Xendit};
 
 #[derive(Clone)]
 pub struct ConnectorData {
@@ -22,9 +22,7 @@ impl ConnectorData {
             ConnectorEnum::Adyen => Box::new(Adyen::new()),
             ConnectorEnum::Razorpay => Box::new(Razorpay::new()),
             ConnectorEnum::Checkout => Box::new(Checkout::new()),
-            ConnectorEnum::Paypal => Box::new(Paypal::new()),
-            ConnectorEnum::Jpmorgan => Box::new(Jpmorgan::new()),
-            ConnectorEnum::Airwallex => Box::new(Airwallex::new()),
+            ConnectorEnum::Xendit => Box::new(Xendit::new()),
         }
     }
 }

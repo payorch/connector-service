@@ -28,9 +28,7 @@ pub struct Connectors {
     pub adyen: ConnectorParams,
     pub razorpay: ConnectorParams,
     pub checkout: ConnectorParams,
-    pub paypal: ConnectorParams,
-    pub jpmorgan: ConnectorParams,
-    pub airwallex: ConnectorParams,
+    pub xendit: ConnectorParams,
 }
 
 #[derive(Clone, serde::Deserialize, Debug)]

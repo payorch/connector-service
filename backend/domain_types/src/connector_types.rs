@@ -19,9 +19,7 @@ pub enum ConnectorEnum {
     Adyen,
     Razorpay,
     Checkout,
-    Paypal,
-    Jpmorgan,
-    Airwallex,
+    Xendit,
 }
 
 impl ForeignTryFrom<i32> for ConnectorEnum {
@@ -32,9 +30,7 @@ impl ForeignTryFrom<i32> for ConnectorEnum {
             2 => Ok(Self::Adyen),
             68 => Ok(Self::Razorpay),
             15 => Ok(Self::Checkout),
-            99 => Ok(Self::Paypal),
-            NEW_CONNECTOR_ID => Ok(Self::Jpmorgan),
-            4 => Ok(Self::Airwallex),
+            87 => Ok(Self::Xendit),
             _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
                 sub_code: "INVALID_CONNECTOR".to_owned(),
                 error_identifier: 401,
