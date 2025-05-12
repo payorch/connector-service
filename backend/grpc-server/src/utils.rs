@@ -155,7 +155,8 @@ pub fn config_from_metadata(
             config.metrics.host = host.to_string();
         }
         if let Some(port) = metrics.get("port").and_then(Value::as_u64) {
-            config.metrics.port = u16::try_from(port).expect("Port number out of range for u16")
+            config.metrics.port = u16::try_from(port)
+                .map_err(|_| tonic::Status::internal("Port number out of range for u16"))?;
         }
     }
 
@@ -165,7 +166,8 @@ pub fn config_from_metadata(
             config.server.host = host.to_string();
         }
         if let Some(port) = server.get("port").and_then(Value::as_u64) {
-            config.server.port = u16::try_from(port).expect("Port number out of range for u16")
+            config.server.port = u16::try_from(port)
+                .map_err(|_| tonic::Status::internal("Port number out of range for u16"))?;
         }
         if let Some(server_type) = server.get("type").and_then(Value::as_str) {
             config.server.type_ = match server_type {

@@ -253,18 +253,16 @@ impl PaymentService for Payments {
         };
 
         // Create common request data
-        let payment_flow_data = match PaymentFlowData::foreign_try_from((
-            payload.clone(),
-            config.connectors.clone(),
-        )) {
-            Ok(data) => data,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid flow data: {}",
-                    e
-                )))
-            }
-        };
+        let payment_flow_data =
+            match PaymentFlowData::foreign_try_from((payload.clone(), config.connectors.clone())) {
+                Ok(data) => data,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid flow data: {}",
+                        e
+                    )))
+                }
+            };
 
         // Create router data
         let router_data = RouterDataV2 {
