@@ -224,7 +224,7 @@ impl PaymentService for Payments {
         request: tonic::Request<PaymentsSyncRequest>,
     ) -> Result<tonic::Response<PaymentsSyncResponse>, tonic::Status> {
         info!("PAYMENT_SYNC_FLOW: initiated");
-
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -311,7 +311,7 @@ impl PaymentService for Payments {
         request: tonic::Request<RefundsSyncRequest>,
     ) -> Result<tonic::Response<RefundsSyncResponse>, tonic::Status> {
         info!("REFUND_SYNC_FLOW: initiated");
-
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -368,6 +368,7 @@ impl PaymentService for Payments {
         request: tonic::Request<PaymentsVoidRequest>,
     ) -> Result<tonic::Response<PaymentsVoidResponse>, tonic::Status> {
         info!("PAYMENT_CANCEL_FLOW: initiated");
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -421,6 +422,7 @@ impl PaymentService for Payments {
         &self,
         request: tonic::Request<IncomingWebhookRequest>,
     ) -> Result<tonic::Response<IncomingWebhookResponse>, tonic::Status> {
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -524,7 +526,7 @@ impl PaymentService for Payments {
         request: tonic::Request<RefundsRequest>,
     ) -> Result<tonic::Response<RefundsResponse>, tonic::Status> {
         info!("REFUND_FLOW: initiated");
-
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -581,7 +583,7 @@ impl PaymentService for Payments {
         request: tonic::Request<PaymentsCaptureRequest>,
     ) -> Result<tonic::Response<PaymentsCaptureResponse>, tonic::Status> {
         info!("PAYMENT_CAPTURE_FLOW: initiated");
-
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
