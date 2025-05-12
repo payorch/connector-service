@@ -1,6 +1,6 @@
 use crate::{
     configs::Config,
-    utils::{auth_from_metadata, connector_from_metadata},
+    utils::{auth_from_metadata, config_from_metadata, connector_from_metadata},
 };
 use connector_integration::types::ConnectorData;
 use domain_types::types::generate_payment_void_response;
@@ -120,7 +120,7 @@ impl PaymentService for Payments {
         request: tonic::Request<PaymentsAuthorizeRequest>,
     ) -> Result<tonic::Response<PaymentsAuthorizeResponse>, tonic::Status> {
         info!("PAYMENT_AUTHORIZE_FLOW: initiated");
-
+        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -138,18 +138,16 @@ impl PaymentService for Payments {
         > = connector_data.connector.get_connector_integration_v2();
 
         // Create common request data
-        let mut payment_flow_data = match PaymentFlowData::foreign_try_from((
-            payload.clone(),
-            self.config.connectors.clone(),
-        )) {
-            Ok(data) => data,
-            Err(e) => {
-                return Err(tonic::Status::invalid_argument(format!(
-                    "Invalid request data: {}",
-                    e
-                )))
-            }
-        };
+        let mut payment_flow_data =
+            match PaymentFlowData::foreign_try_from((payload.clone(), config.connectors.clone())) {
+                Ok(data) => data,
+                Err(e) => {
+                    return Err(tonic::Status::invalid_argument(format!(
+                        "Invalid request data: {}",
+                        e
+                    )))
+                }
+            };
 
         let should_do_order_create = connector_data.connector.should_do_order_create();
 
@@ -191,7 +189,7 @@ impl PaymentService for Payments {
 
         // Execute connector processing
         let response = match external_services::service::execute_connector_processing_step(
-            &self.config.proxy,
+            &config.proxy,
             connector_integration,
             router_data,
         )
