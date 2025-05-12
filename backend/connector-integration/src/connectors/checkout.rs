@@ -4,7 +4,7 @@ use error_stack::ResultExt;
 // use crate::connectors::checkout::transformers::ForeignTryFrom; // Keep local trait, but remove import from checkout.rs
 // use domain_types::connector_types::PaymentsAuthorizeData; // Removed import
 // use domain_types::connector_flow::Authorize; // Removed import
-
+mod test;
 pub struct Checkout;
 
 impl Checkout {
