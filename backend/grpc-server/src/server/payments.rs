@@ -255,7 +255,7 @@ impl PaymentService for Payments {
         // Create common request data
         let payment_flow_data = match PaymentFlowData::foreign_try_from((
             payload.clone(),
-            self.config.connectors.clone(),
+            config.connectors.clone(),
         )) {
             Ok(data) => data,
             Err(e) => {
@@ -277,7 +277,7 @@ impl PaymentService for Payments {
 
         // Execute connector processing
         let response = match external_services::service::execute_connector_processing_step(
-            &self.config.proxy,
+            &config.proxy,
             connector_integration,
             router_data,
         )
@@ -333,7 +333,7 @@ impl PaymentService for Payments {
 
         // Create common request data
         let payment_flow_data =
-            RefundFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+            RefundFlowData::foreign_try_from((payload.clone(), config.connectors.clone()))
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
                 })?;
@@ -349,7 +349,7 @@ impl PaymentService for Payments {
             };
 
         let response = external_services::service::execute_connector_processing_step(
-            &self.config.proxy,
+            &config.proxy,
             connector_integration,
             router_data,
         )
@@ -386,7 +386,7 @@ impl PaymentService for Payments {
         > = connector_data.connector.get_connector_integration_v2();
 
         let payment_flow_data =
-            PaymentFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+            PaymentFlowData::foreign_try_from((payload.clone(), config.connectors.clone()))
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid request data: {}", e))
                 })?;
@@ -405,7 +405,7 @@ impl PaymentService for Payments {
 
         // Execute connector processing
         let response = external_services::service::execute_connector_processing_step(
-            &self.config.proxy,
+            &config.proxy,
             connector_integration,
             router_data,
         )
@@ -422,7 +422,6 @@ impl PaymentService for Payments {
         &self,
         request: tonic::Request<IncomingWebhookRequest>,
     ) -> Result<tonic::Response<IncomingWebhookResponse>, tonic::Status> {
-        let config = config_from_metadata(request.metadata(), self.config.clone())?;
         let connector = connector_from_metadata(request.metadata())?;
         let connector_auth_details = auth_from_metadata(request.metadata())?;
         let payload = request.into_inner();
@@ -548,7 +547,7 @@ impl PaymentService for Payments {
 
         // Create common request data
         let refund_flow_data =
-            RefundFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+            RefundFlowData::foreign_try_from((payload.clone(), config.connectors.clone()))
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
                 })?;
@@ -564,7 +563,7 @@ impl PaymentService for Payments {
             };
 
         let response = external_services::service::execute_connector_processing_step(
-            &self.config.proxy,
+            &config.proxy,
             connector_integration,
             router_data,
         )
@@ -606,7 +605,7 @@ impl PaymentService for Payments {
 
         // Create common request data
         let payment_flow_data =
-            PaymentFlowData::foreign_try_from((payload.clone(), self.config.connectors.clone()))
+            PaymentFlowData::foreign_try_from((payload.clone(), config.connectors.clone()))
                 .map_err(|e| {
                     tonic::Status::invalid_argument(format!("Invalid flow data: {}", e))
                 })?;
@@ -621,7 +620,7 @@ impl PaymentService for Payments {
         };
 
         let response = external_services::service::execute_connector_processing_step(
-            &self.config.proxy,
+            &config.proxy,
             connector_integration,
             router_data,
         )
