@@ -1,32 +1,48 @@
 syntax = "proto3";
 
-package ucs.payments;
+package ucs;
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-// Service definition for payment operations.
+// Service definition for core payment operations.
 service PaymentService {
   // Authorizes a payment.
-  rpc PaymentAuthorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
+  rpc Authorize(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
   // Synchronizes the status of a payment.
-  rpc PaymentSync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
-  // Synchronizes the status of a refund.
-  rpc RefundSync(RefundsSyncRequest) returns (RefundsSyncResponse);
+  rpc Sync(PaymentsSyncRequest) returns (PaymentsSyncResponse);
   // Voids an authorized payment.
-  rpc VoidPayment(PaymentsVoidRequest) returns (PaymentsVoidResponse);
-  // Handles incoming webhooks from connectors.
-  rpc IncomingWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
-  // Processes a refund request.
-  rpc Refund(RefundsRequest) returns (RefundsResponse);
+  rpc Void(PaymentsVoidRequest) returns (PaymentsVoidResponse);
   // Captures a previously authorized payment.
-  rpc PaymentCapture(PaymentsCaptureRequest) returns (PaymentsCaptureResponse);
+  rpc Capture(PaymentsCaptureRequest) returns (PaymentsCaptureResponse);
+}
+
+// Service definition for refund operations.
+service RefundService {
+  // Processes a refund request.
+  rpc Process(RefundsRequest) returns (RefundsResponse);
+  // Synchronizes the status of a refund.
+  rpc Sync(RefundsSyncRequest) returns (RefundsSyncResponse);
+}
+
+// Service definition for mandate operations.
+service MandateService {
   // Sets up a mandate for future payments.
-  rpc SetupMandate(SetupMandateRequest) returns (SetupMandateResponse);
+  rpc Setup(SetupMandateRequest) returns (SetupMandateResponse);
+}
+
+// Service definition for dispute operations.
+service DisputeService {
   // Accepts a dispute.
-  rpc AcceptDispute(AcceptDisputeRequest) returns (AcceptDisputeResponse);
+  rpc Accept(AcceptDisputeRequest) returns (AcceptDisputeResponse);
   // Submits evidence for a dispute.
   rpc SubmitEvidence(SubmitEvidenceRequest) returns (SubmitEvidenceResponse);
+}
+
+// Service definition for handling incoming webhooks.
+service WebhookService {
+  // Handles incoming webhooks from connectors.
+  rpc Handle(IncomingWebhookRequest) returns (IncomingWebhookResponse);
 }
 
 // Request message for authorizing a payment.
