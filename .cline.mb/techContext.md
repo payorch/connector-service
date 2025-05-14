@@ -29,14 +29,39 @@
     *   **TUI Example:** `examples/example-tui/` suggests a Text User Interface example.
     *   **MCP Example:** `examples/example-mcp/` (Model Context Protocol) with Python scripts.
 
-## 3. Key Dependencies (To be confirmed by inspecting Cargo.toml files)
+## 3. Key Dependencies (Confirmed from Cargo.toml files)
 
-*   **gRPC Libraries:** `tonic` (popular Rust gRPC library) is highly probable for `grpc-server`.
-*   **Serialization/Deserialization:** `serde` is standard in the Rust ecosystem for handling data formats like JSON, TOML.
-*   **Async Runtime:** `tokio` is the most common async runtime for Rust and is often used with `tonic`.
-*   **Logging:** A logging framework (e.g., `tracing`, `log`) would be essential. `backend/grpc-server/src/logger/` confirms custom logging setup.
-*   **Error Handling:** Libraries like `thiserror` or `anyhow` for robust error management.
-*   **HTTP Client:** For `connector-integration` to communicate with external payment gateway APIs (e.g., `reqwest`).
+*   **`grpc-server` Crate:**
+    *   `tonic`: gRPC framework.
+    *   `tokio`: Asynchronous runtime.
+    *   `config`: Configuration management.
+    *   `error-stack`: Error handling.
+    *   `tracing` & `tracing-subscriber`: Logging.
+    *   `hyper`, `tower-http`, `http`, `axum`: HTTP related libraries.
+    *   `prometheus`: Metrics.
+    *   `serde`, `serde_json`: Serialization/Deserialization.
+    *   `hyperswitch_interfaces`, `hyperswitch_domain_models`, `hyperswitch_cards`, `hyperswitch_common_enums`, `hyperswitch_common_utils`, `hyperswitch_api_models`: Dependencies from the Hyperswitch project.
+*   **`connector-integration` Crate:**
+    *   `domain_types`: For internal data models.
+    *   `reqwest`: HTTP client for making calls to external payment gateways.
+    *   `serde`, `serde_json`, `serde_qs`, `serde_urlencoded`: Serialization/Deserialization.
+    *   `uuid`: UUID generation.
+    *   `error-stack`: Error handling.
+    *   `hyperswitch_domain_models`, `hyperswitch_common_utils`, `hyperswitch_common_enums`, `hyperswitch_api_models`, `hyperswitch_masking`, `hyperswitch_interfaces`, `hyperswitch_cards`: Dependencies from the Hyperswitch project.
+*   **`domain_types` Crate:**
+    *   `grpc-api-types`: For gRPC API definitions.
+    *   `thiserror`: Error handling.
+    *   `serde`, `serde_json`: Serialization/Deserialization.
+    *   `error-stack`: Error handling.
+    *   `hyperswitch_domain_models`, `hyperswitch_common_enums`, `hyperswitch_cards`, `hyperswitch_common_utils`, `hyperswitch_api_models`, `hyperswitch_interfaces`: Dependencies from the Hyperswitch project.
+*   **`grpc-api-types` Crate:**
+    *   `prost`: Protocol Buffers implementation.
+    *   `tonic`: gRPC framework.
+    *   `axum`: Web framework (likely for utility or specific endpoints).
+    *   `http`: HTTP types.
+    *   `serde`: Serialization/Deserialization.
+    *   `error-stack`: Error handling.
+    *   Build Dependencies: `tonic-build`, `prost-build` for code generation from `.proto` files.
 
 ## 4. Technical Constraints & Considerations
 
