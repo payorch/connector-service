@@ -2,35 +2,88 @@ syntax = "proto3";
 
 package ucs.v1;
 
+import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/juspay/connector-service/backend/grpc-api-types/proto;proto";
 
 // Unified service definition for all payment related operations.
 service PaymentService {
   // Authorizes a payment.
-  rpc AuthorizePayment(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse);
+  rpc AuthorizePayment(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse) {
+    option (google.api.http) = {
+      post: "/v1/payments/authorize"
+      body: "*"
+    };
+  }
   // Synchronizes the status of a payment.
-  rpc SyncPayment(PaymentsSyncRequest) returns (PaymentsSyncResponse);
+  rpc SyncPayment(PaymentsSyncRequest) returns (PaymentsSyncResponse) {
+    option (google.api.http) = {
+      post: "/v1/payments/sync"
+      body: "*"
+    };
+  }
   // Voids an authorized payment.
-  rpc VoidPayment(PaymentsVoidRequest) returns (PaymentsVoidResponse);
+  rpc VoidPayment(PaymentsVoidRequest) returns (PaymentsVoidResponse) {
+    option (google.api.http) = {
+      post: "/v1/payments/void"
+      body: "*"
+    };
+  }
   // Captures a previously authorized payment.
-  rpc CapturePayment(PaymentsCaptureRequest) returns (PaymentsCaptureResponse);
+  rpc CapturePayment(PaymentsCaptureRequest) returns (PaymentsCaptureResponse) {
+    option (google.api.http) = {
+      post: "/v1/payments/capture"
+      body: "*"
+    };
+  }
 
   // Processes a refund request.
-  rpc ProcessRefund(RefundsRequest) returns (RefundsResponse);
+  rpc ProcessRefund(RefundsRequest) returns (RefundsResponse) {
+    option (google.api.http) = {
+      post: "/v1/refunds/process"
+      body: "*"
+    };
+  }
   // Synchronizes the status of a refund.
-  rpc SyncRefund(RefundsSyncRequest) returns (RefundsSyncResponse);
+  rpc SyncRefund(RefundsSyncRequest) returns (RefundsSyncResponse) {
+    option (google.api.http) = {
+      post: "/v1/refunds/sync"
+      body: "*"
+    };
+  }
 
   // Sets up a mandate for future payments.
-  rpc SetupMandate(SetupMandateRequest) returns (SetupMandateResponse);
+  rpc SetupMandate(SetupMandateRequest) returns (SetupMandateResponse) {
+    option (google.api.http) = {
+      post: "/v1/mandates/setup"
+      body: "*"
+    };
+  }
 
   // Accepts a dispute.
-  rpc AcceptDispute(AcceptDisputeRequest) returns (AcceptDisputeResponse);
+  rpc AcceptDispute(AcceptDisputeRequest) returns (AcceptDisputeResponse) {
+    option (google.api.http) = {
+      post: "/v1/disputes/accept"
+      body: "*"
+    };
+  }
   // Submits evidence for a dispute.
-  rpc SubmitDisputeEvidence(SubmitEvidenceRequest) returns (SubmitEvidenceResponse);
+  rpc SubmitDisputeEvidence(SubmitEvidenceRequest) returns (SubmitEvidenceResponse) {
+    option (google.api.http) = {
+      post: "/v1/disputes/submit_evidence"
+      body: "*"
+    };
+  }
 
   // Handles incoming webhooks from connectors.
-  rpc HandleWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse);
+  rpc HandleWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse) {
+    option (google.api.http) = {
+      post: "/v1/webhooks/handle"
+      body: "*"
+    };
+  }
 }
 
 // Request message for authorizing a payment.
