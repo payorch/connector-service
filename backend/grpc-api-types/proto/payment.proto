@@ -8,86 +8,121 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/juspay/connector-service/backend/grpc-api-types/proto;proto";
 
+
+service RefundService {
+  // Synchronizes the status of a refund.
+  rpc Get(RefundServiceGetRequest) returns (RefundServiceGetResponse) {
+    option (google.api.http) = {
+      post: "/v1/refund/get"
+      body: "*"
+    };
+  }
+
+
+   // Handles incoming webhooks from connectors.
+   rpc Transform(RefundServiceTransformRequest) returns (RefundServiceTransformResponse) {
+     option (google.api.http) = {
+       post: "/v1/refund/transform"
+       body: "*"
+     };
+   }
+}
+
+service DisputeService {
+  // Submits evidence for a dispute.
+  rpc SubmitEvidence(DisputeServiceSubmitEvidenceRequest) returns (DisputeServiceSubmitEvidenceResponse) {
+    option (google.api.http) = {
+      post: "/v1/dispute/submit_evidence"
+      body: "*"
+    };
+  }
+
+  // Retrieves dispute information or evidence submission status.
+  rpc Get(DisputeServiceGetRequest) returns (DisputeServiceGetResponse) {
+    option (google.api.http) = {
+      post: "/v1/dispute/get"
+      body: "*"
+    };
+  }
+
+
+   // Handles incoming webhooks from connectors.
+   rpc Transform(DisputeServiceTransformRequest) returns (DisputeServiceTransformResponse) {
+     option (google.api.http) = {
+       post: "/v1/dispute/transform"
+       body: "*"
+     };
+   }
+}
+
 // Unified service definition for all payment related operations.
 service PaymentService {
   // Authorizes a payment.
-  rpc AuthorizePayment(PaymentsAuthorizeRequest) returns (PaymentsAuthorizeResponse) {
+  rpc Authorize(PaymentServiceAuthorizeRequest) returns (PaymentServiceAuthorizeResponse) {
     option (google.api.http) = {
-      post: "/v1/payments/authorize"
+      post: "/v1/payment/authorize"
       body: "*"
     };
   }
   // Synchronizes the status of a payment.
-  rpc SyncPayment(PaymentsSyncRequest) returns (PaymentsSyncResponse) {
+  rpc Get(PaymentServiceGetRequest) returns (PaymentServiceGetResponse) {
     option (google.api.http) = {
-      post: "/v1/payments/sync"
+      post: "/v1/payment/get"
       body: "*"
     };
   }
   // Voids an authorized payment.
-  rpc VoidPayment(PaymentsVoidRequest) returns (PaymentsVoidResponse) {
+  rpc Void(PaymentServiceVoidRequest) returns (PaymentServiceVoidResponse) {
     option (google.api.http) = {
-      post: "/v1/payments/void"
+      post: "/v1/payment/void"
       body: "*"
     };
   }
   // Captures a previously authorized payment.
-  rpc CapturePayment(PaymentsCaptureRequest) returns (PaymentsCaptureResponse) {
+  rpc Capture(PaymentServiceCaptureRequest) returns (PaymentServiceCaptureResponse) {
     option (google.api.http) = {
-      post: "/v1/payments/capture"
+      post: "/v1/payment/capture"
       body: "*"
     };
   }
 
   // Processes a refund request.
-  rpc ProcessRefund(RefundsRequest) returns (RefundsResponse) {
+  rpc Refund(PaymentServiceRefundRequest) returns (PaymentServiceRefundResponse) {
     option (google.api.http) = {
-      post: "/v1/refunds/process"
-      body: "*"
-    };
-  }
-  // Synchronizes the status of a refund.
-  rpc SyncRefund(RefundsSyncRequest) returns (RefundsSyncResponse) {
-    option (google.api.http) = {
-      post: "/v1/refunds/sync"
+      post: "/v1/payment/refund"
       body: "*"
     };
   }
 
   // Sets up a mandate for future payments.
-  rpc SetupMandate(SetupMandateRequest) returns (SetupMandateResponse) {
+  rpc Register(PaymentServiceRegisterRequest) returns (PaymentServiceRegisterResponse) {
     option (google.api.http) = {
-      post: "/v1/mandates/setup"
+      post: "/v1/payment/register"
       body: "*"
     };
   }
 
   // Accepts a dispute.
-  rpc AcceptDispute(AcceptDisputeRequest) returns (AcceptDisputeResponse) {
+  rpc Dispute(PaymentServiceDisputeRequest) returns (PaymentServiceDisputeResponse) {
     option (google.api.http) = {
-      post: "/v1/disputes/accept"
-      body: "*"
-    };
-  }
-  // Submits evidence for a dispute.
-  rpc SubmitDisputeEvidence(SubmitEvidenceRequest) returns (SubmitEvidenceResponse) {
-    option (google.api.http) = {
-      post: "/v1/disputes/submit_evidence"
+      post: "/v1/payment/dispute"
       body: "*"
     };
   }
 
-  // Handles incoming webhooks from connectors.
-  rpc HandleWebhook(IncomingWebhookRequest) returns (IncomingWebhookResponse) {
-    option (google.api.http) = {
-      post: "/v1/webhooks/handle"
-      body: "*"
-    };
-  }
+
+   // Handles incoming webhooks from connectors.
+   // This will delegate to the appropriate service transform based on the event type.
+   rpc Transform(PaymentServiceTransformRequest) returns (PaymentServiceTransformResponse) {
+     option (google.api.http) = {
+       post: "/v1/payment/transform"
+       body: "*"
+     };
+   }
 }
 
 // Request message for authorizing a payment.
-message PaymentsAuthorizeRequest {
+message PaymentServiceAuthorizeRequest {
   // Core Payment Details
   // The amount for the payment in major currency units (e.g., dollars, euros).
   int64 amount = 1;
@@ -176,7 +211,7 @@ message PaymentsAuthorizeRequest {
 }
 
 // Response message for a payment authorization.
-message PaymentsAuthorizeResponse {
+message PaymentServiceAuthorizeResponse {
   // Identifier for the resource created or affected by the request.
   ResponseId resource_id = 1;
   // Data for redirecting the customer's browser, if required.
@@ -198,7 +233,7 @@ message PaymentsAuthorizeResponse {
 }
 
 // Request message for synchronizing payment status.
-message PaymentsSyncRequest {
+message PaymentServiceGetRequest {
   // The resource ID (e.g., payment ID) to synchronize.
   string resource_id = 1;
   // Optional connector-specific request reference ID for the sync operation.
@@ -206,7 +241,7 @@ message PaymentsSyncRequest {
 }
 
 // Response message for a payment status synchronization.
-message PaymentsSyncResponse {
+message PaymentServiceGetResponse {
   // Identifier for the synchronized resource.
   ResponseId resource_id = 1;
   // Current status of the payment attempt.
@@ -224,7 +259,7 @@ message PaymentsSyncResponse {
 }
 
 // Request message for synchronizing refund status.
-message RefundsSyncRequest {
+message RefundServiceGetRequest {
   // Connector's transaction ID for the original payment.
   string connector_transaction_id = 1;
   // Connector's ID for the refund.
@@ -234,7 +269,7 @@ message RefundsSyncRequest {
 }
 
 // Response message for a refund status synchronization.
-message RefundsSyncResponse {
+message RefundServiceGetResponse {
   // Connector's ID for the refund.
   optional string connector_refund_id = 1;
   // Current status of the refund.
@@ -248,7 +283,7 @@ message RefundsSyncResponse {
 }
 
 // Request message for voiding a payment.
-message PaymentsVoidRequest {
+message PaymentServiceVoidRequest {
   // Connector's request reference ID for the void operation.
   string connector_request_reference_id = 1; // Renumbered
   // Reason for cancelling/voiding the payment.
@@ -256,7 +291,7 @@ message PaymentsVoidRequest {
 }
 
 // Response message for a payment void operation.
-message PaymentsVoidResponse {
+message PaymentServiceVoidResponse {
   // Identifier for the voided resource.
   ResponseId resource_id = 1;
   // Status of the payment attempt after voiding.
@@ -269,16 +304,52 @@ message PaymentsVoidResponse {
   optional string error_message = 5;
 }
 
-// Request message for an incoming webhook.
-message IncomingWebhookRequest {
+// Request message for PaymentService.Transform RPC
+message PaymentServiceTransformRequest {
   // Details of the incoming HTTP request from the connector.
-  RequestDetails request_details = 1; // Renumbered
+  RequestDetails request_details = 1;
   // Secrets used for verifying the webhook's authenticity.
-  optional ConnectorWebhookSecrets webhook_secrets = 2; // Renumbered
+  optional ConnectorWebhookSecrets webhook_secrets = 2;
 }
 
-// Response message for an incoming webhook.
-message IncomingWebhookResponse {
+// Response message for PaymentService.Transform RPC
+message PaymentServiceTransformResponse {
+  // Type of event indicated by the webhook (e.g., payment, refund).
+  EventType event_type = 1;
+  // Content of the webhook, parsed into a specific response type.
+  WebhookResponseContent content = 2;
+  // Indicates if the source of the webhook was successfully verified.
+  bool source_verified = 3;
+}
+
+// Request message for RefundService.Transform RPC
+message RefundServiceTransformRequest {
+  // Details of the incoming HTTP request from the connector.
+  RequestDetails request_details = 1;
+  // Secrets used for verifying the webhook's authenticity.
+  optional ConnectorWebhookSecrets webhook_secrets = 2;
+}
+
+// Response message for RefundService.Transform RPC
+message RefundServiceTransformResponse {
+  // Type of event indicated by the webhook (e.g., payment, refund).
+  EventType event_type = 1;
+  // Content of the webhook, parsed into a specific response type.
+  WebhookResponseContent content = 2;
+  // Indicates if the source of the webhook was successfully verified.
+  bool source_verified = 3;
+}
+
+// Request message for DisputeService.Transform RPC
+message DisputeServiceTransformRequest {
+  // Details of the incoming HTTP request from the connector.
+  RequestDetails request_details = 1;
+  // Secrets used for verifying the webhook's authenticity.
+  optional ConnectorWebhookSecrets webhook_secrets = 2;
+}
+
+// Response message for DisputeService.Transform RPC
+message DisputeServiceTransformResponse {
   // Type of event indicated by the webhook (e.g., payment, refund).
   EventType event_type = 1;
   // Content of the webhook, parsed into a specific response type.
@@ -288,7 +359,7 @@ message IncomingWebhookResponse {
 }
 
 // Request message for setting up a mandate. (Mirrors PaymentsAuthorizeRequest structure for mandate setup)
-message SetupMandateRequest {
+message PaymentServiceRegisterRequest {
   // Core Mandate Details
   // The currency for the mandate, in ISO 4217 three-letter code.
   Currency currency = 1; // Renumbered
@@ -373,7 +444,7 @@ message SetupMandateRequest {
 }
 
 // Response message for a mandate setup operation.
-message SetupMandateResponse {
+message PaymentServiceRegisterResponse {
   // Identifier for the resource created (typically the mandate).
   ResponseId resource_id = 1;
   // Data for redirecting the customer's browser, if required.
@@ -408,9 +479,9 @@ enum EventType {
 message WebhookResponseContent {
   oneof content {
     // Content if the webhook is for a payment synchronization.
-    PaymentsSyncResponse payments_response = 1;
+    PaymentServiceGetResponse payments_response = 1;
     // Content if the webhook is for a refund synchronization.
-    RefundsSyncResponse refunds_response = 2;
+    RefundServiceGetResponse refunds_response = 2;
   }
 }
 
@@ -437,7 +508,7 @@ message ConnectorWebhookSecrets {
 }
 
 // Request message for processing a refund.
-message RefundsRequest {
+message PaymentServiceRefundRequest {
   // Core Refund Details
   // Unique identifier for the refund in the merchant's system.
   string refund_id = 1;
@@ -480,7 +551,7 @@ message RefundsRequest {
 }
 
 // Response message for a refund operation.
-message RefundsResponse {
+message PaymentServiceRefundResponse {
   // Connector's ID for the refund.
   optional string connector_refund_id = 1;
   // Status of the refund.
@@ -1264,7 +1335,7 @@ message MultipleCaptureRequestData {
 }
 
 // Request message for capturing a payment.
-message PaymentsCaptureRequest {
+message PaymentServiceCaptureRequest {
   // Connector's transaction ID for the original authorized payment.
   string connector_transaction_id = 1;
   // Amount to capture, in minor currency units.
@@ -1278,7 +1349,7 @@ message PaymentsCaptureRequest {
 }
 
 // Response message for a payment capture operation.
-message PaymentsCaptureResponse {
+message PaymentServiceCaptureResponse {
   // Identifier for the captured resource.
   ResponseId resource_id = 1;
   // Status of the payment after the capture attempt.
@@ -1292,7 +1363,7 @@ message PaymentsCaptureResponse {
 }
 
 // Request message for accepting a dispute.
-message AcceptDisputeRequest {
+message PaymentServiceDisputeRequest {
   // Merchant's unique identifier for the dispute.
   optional string dispute_id = 1;
   // Connector's unique identifier for the dispute.
@@ -1300,7 +1371,7 @@ message AcceptDisputeRequest {
 }
 
 // Response message for an accept dispute operation.
-message AcceptDisputeResponse {
+message PaymentServiceDisputeResponse {
   // Connector's unique identifier for the dispute.
   optional string connector_dispute_id = 1;
   // Status of the dispute after acceptance.
@@ -1343,8 +1414,8 @@ message EvidenceDocument {
   optional string text_content = 5;
 }
 
-// Request message for submitting evidence for a dispute.
-message SubmitEvidenceRequest {
+// Request message for submitting evidence for a dispute for DisputeService.SubmitEvidence RPC
+message DisputeServiceSubmitEvidenceRequest {
   // Merchant's unique identifier for the dispute.
   optional string dispute_id = 1;
   // Connector's unique identifier for the dispute.
@@ -1360,8 +1431,39 @@ message SubmitEvidenceRequest {
   repeated EvidenceDocument evidence_documents = 5;
 }
 
-// Response message for a submit evidence operation.
-message SubmitEvidenceResponse {
+// Response message for a submit evidence operation for DisputeService.SubmitEvidence RPC
+message DisputeServiceSubmitEvidenceResponse {
+  // Connector's unique identifier for the dispute.
+  optional string connector_dispute_id = 1;
+  // Status of the dispute after submitting evidence.
+  DisputeStatus dispute_status = 2;
+  // Connector's specific status for the dispute.
+  optional string connector_dispute_status_code = 3; // Renamed from connector_dispute_status
+  // Error code if submitting evidence failed.
+  optional string error_code = 4;
+  // Error message if submitting evidence failed.
+  optional string error_message = 5;
+}
+
+// Request message for retrieving dispute information for DisputeService.Get RPC
+message DisputeServiceGetRequest {
+  // Merchant's unique identifier for the dispute.
+  optional string dispute_id = 1;
+  // Connector's unique identifier for the dispute.
+  string connector_dispute_id = 2;
+
+  // Date of service, if applicable to the dispute.
+  optional google.protobuf.Timestamp service_date = 3;
+  // Date of shipping, if applicable to the dispute.
+  optional google.protobuf.Timestamp shipping_date = 4;
+
+  // Collection of all evidence documents supporting the dispute rebuttal.
+  // Each document should have a clear `evidence_type`.
+  repeated EvidenceDocument evidence_documents = 5;
+}
+
+// Response message for a retrieve dispute information operation for DisputeService.Get RPC
+message DisputeServiceGetResponse {
   // Connector's unique identifier for the dispute.
   optional string connector_dispute_id = 1;
   // Status of the dispute after submitting evidence.
