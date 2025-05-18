@@ -26,6 +26,7 @@ pub enum ConnectorEnum {
     Adyen,
     Razorpay,
     Elavon,
+    Authorizedotnet,
 }
 
 impl ForeignTryFrom<i32> for ConnectorEnum {
@@ -36,6 +37,7 @@ impl ForeignTryFrom<i32> for ConnectorEnum {
             2 => Ok(Self::Adyen),
             68 => Ok(Self::Razorpay),
             778 => Ok(Self::Elavon),
+            779 => Ok(Self::Authorizedotnet),
             _ => Err(ApplicationErrorResponse::BadRequest(ApiError {
                 sub_code: "INVALID_CONNECTOR".to_owned(),
                 error_identifier: 401,

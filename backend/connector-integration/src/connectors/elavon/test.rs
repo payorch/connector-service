@@ -13,6 +13,7 @@ mod tests {
     use hyperswitch_masking::Secret;
     use serde_json::json;
     use std::{str::FromStr, borrow::Cow};
+    use bytes::Bytes;
     use hyperswitch_common_utils::{id_type::MerchantId, pii::Email, request::RequestContent, types::{MinorUnit, StringMajorUnit}};
     use domain_types::{
         connector_types::{
@@ -79,6 +80,10 @@ mod tests {
                     },
                     elavon: ConnectorParams {
                         base_url: "https://elavon_test.com/".to_string(),
+                        dispute_base_url: None,
+                    },
+                    authorizedotnet: ConnectorParams {
+                        base_url: "MOCK_AUTHORIZEDOTNET_URL".to_string(),
                         dispute_base_url: None,
                     },
                 },
@@ -150,7 +155,7 @@ mod tests {
 
         #[test]
         fn test_authorize_request_build() {
-            let connector_data = get_elavon_connector_data();
+            let elavon_connector = Elavon::new();
             let router_data = fn_to_get_router_data_for_elavon(
                 PaymentMethodData::Card(Card {
                     card_number: CardNumber::from_str("4012888818888").unwrap(),
@@ -163,14 +168,7 @@ mod tests {
                 MinorUnit::new(1000),
             );
 
-            let authorize_integration = ConnectorCommon::get_connector_integration_v2::<
-                Authorize, 
-                PaymentFlowData, 
-                PaymentsAuthorizeData, 
-                PaymentsResponseData
-            >(connector_data.connector.as_ref());
-
-            let result = authorize_integration.get_request_body(&router_data);
+            let result = elavon_connector.get_request_body(&router_data);
             assert!(result.is_ok());
             let request_content = result.unwrap().unwrap();
 
@@ -188,94 +186,81 @@ mod tests {
 
         #[test]
         fn test_authorize_response_handling_success() {
-            let connector_data = get_elavon_connector_data();
+            let elavon_connector = Elavon::new();
             let router_data = fn_to_get_router_data_for_elavon(
                 PaymentMethodData::Card(Card::default()),
                 AuthenticationType::NoThreeDs,
                 MinorUnit::new(1000),
             );
 
-            let response_xml = br#"
-                <txn>
-                    <ssl_result>0</ssl_result>
-                    <ssl_txn_id>TEST_TXN_123</ssl_txn_id>
-                    <ssl_result_message>APPROVAL</ssl_result_message>
-                    <ssl_approval_code>A123</ssl_approval_code>
-                    <ssl_transaction_type>ccsale</ssl_transaction_type>
-                </txn>
-            "#;
+            let mock_response_xml = [
+                "<txn>",
+                "    <ssl_result>0</ssl_result>",
+                "    <ssl_result_message>APPROVAL</ssl_result_message>",
+                "    <ssl_txn_id>TEST_TXN_ID_SUCCESS</ssl_txn_id>",
+                "    <ssl_cvv2_response>M</ssl_cvv2_response>",
+                "    <ssl_avs_response>Y</ssl_avs_response>",
+                "    <ssl_transaction_type>ccsale</ssl_transaction_type>",
+                "</txn>"
+            ].join("\n");
 
             let response = HsResponse {
-                headers: None,
-                response: response_xml.to_vec().into(),
                 status_code: 200,
+                response: Bytes::from(mock_response_xml),
+                headers: None,
             };
             
-            let authorize_integration = ConnectorCommon::get_connector_integration_v2::<
-                Authorize, 
-                PaymentFlowData, 
-                PaymentsAuthorizeData, 
-                PaymentsResponseData
-            >(connector_data.connector.as_ref());
-
-            let result = authorize_integration.handle_response_v2(&router_data, None, response);
+            let result = elavon_connector.handle_response_v2(&router_data, None, response);
             assert!(result.is_ok());
-            let response_router_data = result.unwrap();
-            assert_eq!(response_router_data.resource_common_data.status, AttemptStatus::Charged);
-            match response_router_data.response {
+            let router_data_updated = result.unwrap();
+
+            assert_eq!(router_data_updated.resource_common_data.status, AttemptStatus::Charged);
+            match router_data_updated.response {
                 Ok(PaymentsResponseData::TransactionResponse { resource_id, .. }) => {
-                     match resource_id {
-                        ConnectorResponseId::ConnectorTransactionId(id) => assert_eq!(id, "TEST_TXN_123"),
-                        _ => panic!("Unexpected resource_id variant")
-                     }
-                },
-                _ => panic!("Expected successful transaction response"),
+                    match resource_id {
+                        hyperswitch_domain_models::router_request_types::ResponseId::ConnectorTransactionId(id) => assert_eq!(id, "TEST_TXN_ID_SUCCESS"),
+                        _ => panic!("Unexpected resource_id variant"),
+                    }
+                }
+                _ => panic!("Expected successful TransactionResponse"),
             }
         }
 
-         #[test]
+        #[test]
         fn test_authorize_response_handling_failure() {
-            let connector_data = get_elavon_connector_data();
+            let elavon_connector = Elavon::new();
             let router_data = fn_to_get_router_data_for_elavon(
                 PaymentMethodData::Card(Card::default()),
                 AuthenticationType::NoThreeDs,
                 MinorUnit::new(1000),
             );
+            
+            let mock_response_xml = [
+                "<txn>",
+                "    <errorName>DECLINED</errorName>",
+                "    <errorMessage>Card Declined</errorMessage>",
+                "    <errorCode>101</errorCode>",
+                "</txn>"
+            ].join("\n");
 
-            let response_xml = br#"
-                <txn>
-                    <ssl_result>1</ssl_result>
-                    <ssl_txn_id>TEST_TXN_FAIL</ssl_txn_id>
-                    <ssl_result_message>DECLINED</ssl_result_message>
-                    <error_name>DECLINED</error_name>
-                    <error_message>Card Declined</error_message>
-                    <error_code>001</error_code>
-                </txn>
-            "#;
-             let response = HsResponse {
-                headers: None,
-                response: response_xml.to_vec().into(),
+            let response = HsResponse {
                 status_code: 200,
+                response: Bytes::from(mock_response_xml),
+                headers: None,
             };
 
-            let authorize_integration = ConnectorCommon::get_connector_integration_v2::<
-                Authorize, 
-                PaymentFlowData, 
-                PaymentsAuthorizeData, 
-                PaymentsResponseData
-            >(connector_data.connector.as_ref());
-
-            let result = authorize_integration.handle_response_v2(&router_data, None, response);
+            let result = elavon_connector.handle_response_v2(&router_data, None, response);
             assert!(result.is_ok());
-            let response_router_data = result.unwrap();
-            assert_eq!(response_router_data.resource_common_data.status, AttemptStatus::Failure);
-            match response_router_data.response {
-                Err(err) => {
-                    assert_eq!(err.code, "001");
-                    assert_eq!(err.message, "Card Declined");
-                    assert_eq!(err.reason, Some("DECLINED".to_string()));
-                },
-                _ => panic!("Expected error response"),
+            let router_data_updated = result.unwrap();
+            
+            assert_eq!(router_data_updated.resource_common_data.status, AttemptStatus::Failure);
+            match router_data_updated.response {
+                Err(err_resp) => {
+                    assert_eq!(err_resp.code, "101");
+                    assert_eq!(err_resp.message, "Card Declined");
+                    assert_eq!(err_resp.reason, Some("DECLINED".to_string()));
+                }
+                _ => panic!("Expected ErrorResponse"),
             }
         }
     }

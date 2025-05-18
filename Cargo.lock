@@ -999,6 +999,7 @@ dependencies = [
  "common_enums",
  "common_utils",
  "domain_types",
+ "encoding_rs",
  "error-stack 0.4.1",
  "hyperswitch_connectors",
  "hyperswitch_domain_models",

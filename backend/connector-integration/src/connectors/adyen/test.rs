@@ -75,6 +75,10 @@ mod tests {
                             base_url: "https://api.elavon.com/".to_string(),
                             dispute_base_url: None,
                         },
+                        authorizedotnet: ConnectorParams {
+                            base_url: "MOCK_AUTHORIZEDOTNET_URL".to_string(),
+                            dispute_base_url: None,
+                        },
                     },
                     external_latency: None,
                 },
@@ -239,6 +243,10 @@ mod tests {
                         },
                         elavon: ConnectorParams {
                             base_url: "https://api.elavon.com/".to_string(),
+                            dispute_base_url: None,
+                        },
+                        authorizedotnet: ConnectorParams {
+                            base_url: "MOCK_AUTHORIZEDOTNET_URL".to_string(),
                             dispute_base_url: None,
                         },
                     },

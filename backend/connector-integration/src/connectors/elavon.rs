@@ -17,6 +17,7 @@ use hyperswitch_common_utils::{
     types::{AmountConvertor, StringMajorUnit, StringMajorUnitForConnector},
     
 };
+use hyperswitch_connectors::utils;
 use hyperswitch_domain_models::{
     router_data::{ConnectorAuthType, ErrorResponse},
     router_data_v2::RouterDataV2, router_request_types::SyncRequestType,
@@ -205,11 +206,12 @@ impl connector_integration_v2::ConnectorIntegrationV2<Authorize, PaymentFlowData
         &self,
         req: &RouterDataV2<Authorize, PaymentFlowData, PaymentsAuthorizeData, PaymentsResponseData>,
     ) -> CustomResult<Option<RequestContent>, hs_errors::ConnectorError> {
-        let amount = self.amount_converter.convert(
+        
+        let amount=utils::convert_amount(
+            self.amount_converter,
             req.request.minor_amount,
             req.request.currency,
-        ).change_context(hs_errors::ConnectorError::RequestEncodingFailed)
-         .attach_printable("Failed to convert amount for Elavon Authorize request")?;
+        )?;
 
         let elavon_router_data = elavon::ElavonRouterData::try_from((amount, req))
             .change_context(hs_errors::ConnectorError::RequestEncodingFailed)
