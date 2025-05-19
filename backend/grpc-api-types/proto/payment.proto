@@ -8,7 +8,6 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/juspay/connector-service/backend/grpc-api-types/proto;proto";
 
-
 service RefundService {
   // Synchronizes the status of a refund.
   rpc Get(RefundServiceGetRequest) returns (RefundServiceGetResponse) {
@@ -18,14 +17,13 @@ service RefundService {
     };
   }
 
-
-   // Handles incoming webhooks from connectors.
-   rpc Transform(RefundServiceTransformRequest) returns (RefundServiceTransformResponse) {
-     option (google.api.http) = {
-       post: "/v1/refund/transform"
-       body: "*"
-     };
-   }
+  // Handles incoming webhooks from connectors.
+  rpc Transform(RefundServiceTransformRequest) returns (RefundServiceTransformResponse) {
+    option (google.api.http) = {
+      post: "/v1/refund/transform"
+      body: "*"
+    };
+  }
 }
 
 service DisputeService {
@@ -45,14 +43,13 @@ service DisputeService {
     };
   }
 
-
-   // Handles incoming webhooks from connectors.
-   rpc Transform(DisputeServiceTransformRequest) returns (DisputeServiceTransformResponse) {
-     option (google.api.http) = {
-       post: "/v1/dispute/transform"
-       body: "*"
-     };
-   }
+  // Handles incoming webhooks from connectors.
+  rpc Transform(DisputeServiceTransformRequest) returns (DisputeServiceTransformResponse) {
+    option (google.api.http) = {
+      post: "/v1/dispute/transform"
+      body: "*"
+    };
+  }
 }
 
 // Unified service definition for all payment related operations.
@@ -110,15 +107,14 @@ service PaymentService {
     };
   }
 
-
-   // Handles incoming webhooks from connectors.
-   // This will delegate to the appropriate service transform based on the event type.
-   rpc Transform(PaymentServiceTransformRequest) returns (PaymentServiceTransformResponse) {
-     option (google.api.http) = {
-       post: "/v1/payment/transform"
-       body: "*"
-     };
-   }
+  // Handles incoming webhooks from connectors.
+  // This will delegate to the appropriate service transform based on the event type.
+  rpc Transform(PaymentServiceTransformRequest) returns (PaymentServiceTransformResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/transform"
+      body: "*"
+    };
+  }
 }
 
 // Request message for authorizing a payment.
@@ -980,7 +976,7 @@ enum PaymentMethod {
 message PaymentAddress {
   // Shipping address.
   optional Address shipping_address = 1; // Renamed from shipping
-  // Billing address.
+  // Billing address. // TODO: why are there 3 billing addresses?
   optional Address billing_address = 2; // Renamed from billing
   // Unified payment method billing address (used by some connectors).
   optional Address unified_payment_method_billing_address = 3; // Renamed from unified_payment_method_billing
@@ -1264,7 +1260,7 @@ message Address {
   // Country, using Alpha-2 code.
   optional CountryAlpha2 country_alpha2_code = 9; // Renamed from country
 
-  // Contact Information
+  // Contact Information // TODO: This can be a separate message
   // Email address associated with this address.
   optional string email = 10;
   // Phone number.

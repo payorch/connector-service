@@ -10,10 +10,8 @@ lint:
     - STANDARD
   ignore_only:
     ENUM_VALUE_PREFIX:
-      - proto/payment.proto
-  disallow_comment_ignores: true
-  enum_zero_value_suffix: _UNSPECIFIED
-  service_suffix: Service
-  rpc_allow_same_request_response: false
-  rpc_allow_google_protobuf_empty_requests: false
-  rpc_allow_google_protobuf_empty_responses: false
+      - backend/grpc-api-types/proto
+    ENUM_ZERO_VALUE_SUFFIX:
+      - backend/grpc-api-types/proto 
+    SERVICE_SUFFIX:
+      - backend/grpc-api-types/proto/health_check.proto
