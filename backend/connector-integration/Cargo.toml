@@ -30,6 +30,9 @@ reqwest = { version = "0.11.27", features = ["json", "rustls-tls", "gzip", "mult
 bytes = "1.6.0"
 quick-xml = { version = "0.31.0", features = ["serialize"] }
 encoding_rs = "0.8"
+hmac = "0.12"   # or the latest version
+sha2 = "0.10"   # required for HMAC_SHA256
+ring = "0.17" 
 
 [features]
 default = []

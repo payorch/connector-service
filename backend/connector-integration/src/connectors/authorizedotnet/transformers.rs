@@ -81,6 +81,7 @@ impl<T> TryFrom<(&api::CurrencyUnit, api_enums::Currency, MinorUnit, T, Merchant
         ),
     ) -> Result<Self, Self::Error> {
         let amount_str = to_major_unit_string(minor_amount, currency)?;
+        // let amount =get_amount_as_f64(_currency_unit, minor_amount, currency)?;
         Ok(Self {
             amount: amount_str,
             router_data: item,
