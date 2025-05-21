@@ -95,7 +95,7 @@ impl Payments {
             &self.config.proxy,
             connector_integration,
             order_router_data,
-            &connector_name,
+            connector_name,
         )
         .await
         .switch()
@@ -155,7 +155,7 @@ impl Payments {
             &self.config.proxy,
             connector_integration,
             order_router_data,
-            &connector_name,
+            connector_name,
         )
         .await
         .switch()

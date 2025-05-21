@@ -1,9 +1,14 @@
 use error_stack::ResultExt;
 use lazy_static::lazy_static;
-use prometheus::{self, Encoder, TextEncoder, HistogramVec, IntCounterVec, register_histogram_vec, register_int_counter_vec};
+use prometheus::{
+    self, Encoder, HistogramVec, IntCounterVec, TextEncoder, register_histogram_vec,
+    register_int_counter_vec,
+};
 
 // Define latency buckets for histograms
-const LATENCY_BUCKETS: &[f64] = &[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
+const LATENCY_BUCKETS: &[f64] = &[
+    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+];
 
 // const MICROS_500: f64 = 0.0001;
 
@@ -86,4 +91,3 @@ pub enum MetricsError {
 }
 
 // Ensure no manual implementation of std::fmt::Display exists for MetricsError to avoid conflicts with thiserror::Error derive macro
-

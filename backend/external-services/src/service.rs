@@ -13,9 +13,9 @@ use hyperswitch_masking::{ErasedMaskSerialize, Maskable};
 use once_cell::sync::OnceCell;
 use reqwest::Client;
 use serde_json::json;
+use shared_metrics::metrics;
 use std::{str::FromStr, time::Duration};
 use tracing::field::Empty;
-use shared_metrics::metrics;
 
 use hyperswitch_interfaces::{
     connector_integration_v2::BoxedConnectorIntegrationV2, errors::ConnectorError, types::Response,
@@ -157,7 +157,11 @@ where
                         }
                         Err(body) => {
                             metrics::external_service_api_calls_errors
-                                .with_label_values(&[connector_name, &method.to_string(), body.status_code.to_string().as_str()])
+                                .with_label_values(&[
+                                    connector_name,
+                                    &method.to_string(),
+                                    body.status_code.to_string().as_str(),
+                                ])
                                 .inc();
                             let error = match body.status_code {
                                 500..=511 => connector.get_5xx_error_response(body, None)?,
