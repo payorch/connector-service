@@ -16,10 +16,7 @@ use hyperswitch_common_enums::{
     AttemptStatus, CaptureMethod, CardNetwork, EventClass, PaymentMethod, PaymentMethodType,
 };
 use hyperswitch_common_utils::{
-    errors::CustomResult,
-    ext_traits::ByteSliceExt,
-    pii::SecretSerdeValue,
-    request::RequestContent,
+    errors::CustomResult, ext_traits::ByteSliceExt, pii::SecretSerdeValue, request::RequestContent,
 };
 use std::sync::LazyLock;
 
