@@ -7,7 +7,6 @@ use error_stack::Report;
 use http::request::Request;
 use hyperswitch_common_utils::errors::CustomResult;
 use hyperswitch_domain_models::router_data::ConnectorAuthType;
-use std::time::Instant;
 use tonic::metadata;
 
 /// Record the header's fields in request's trace
@@ -182,7 +181,7 @@ macro_rules! implement_connector_operation {
             };
 
             metrics::grpc_server_requests_total
-            .with_label_values(&[&log_prefix, &connector.to_string()])
+            .with_label_values(&[&$log_prefix, &connector.to_string()])
             .inc();
             // Execute connector processing
             let response_result = external_services::service::execute_connector_processing_step(
@@ -199,13 +198,13 @@ macro_rules! implement_connector_operation {
             let final_response = $generate_response_fn(response_result)
                 .into_grpc_status()?;
 
-                metrics::grpc_server_requests_successful
-                .with_label_values(&["payment_authorize", &connector.to_string()])
-                .inc();
+            metrics::grpc_server_requests_successful
+            .with_label_values(&[&$log_prefix, &connector.to_string()])
+            .inc();
 
             let duration = start_time.elapsed().as_secs_f64();
             metrics::grpc_server_request_latency
-                .with_label_values(&["payment_authorize", &connector.to_string()])
+                .with_label_values(&[&$log_prefix, &connector.to_string()])
                 .observe(duration);
 
             Ok(tonic::Response::new(final_response))
