@@ -4,15 +4,16 @@ use crate::{with_error_response_body, with_response_body};
 use domain_types::{
     capture_method_not_supported,
     connector_flow::{
-        Accept, Authorize, Capture, CreateOrder, PSync, RSync, Refund, SetupMandate,
+        Accept, Authorize, Capture, CreateOrder, DefendDispute, PSync, RSync, Refund, SetupMandate,
         SubmitEvidence, Void,
     },
+    connector_types::{is_mandate_supported, ConnectorSpecifications, ConnectorValidation},
     connector_types::{
-        is_mandate_supported, AcceptDispute, AcceptDisputeData, ConnectorServiceTrait,
-        ConnectorSpecifications, ConnectorValidation, ConnectorWebhookSecrets, DisputeFlowData,
-        DisputeResponseData, EventType, IncomingWebhook, PaymentAuthorizeV2, PaymentCapture,
-        PaymentCreateOrderData, PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate,
-        PaymentSyncV2, PaymentVoidData, PaymentVoidV2, PaymentsAuthorizeData, PaymentsCaptureData,
+        AcceptDispute, AcceptDisputeData, ConnectorServiceTrait, ConnectorWebhookSecrets,
+        DisputeDefend, DisputeDefendData, DisputeFlowData, DisputeResponseData, EventType,
+        IncomingWebhook, PaymentAuthorizeV2, PaymentCapture, PaymentCreateOrderData,
+        PaymentCreateOrderResponse, PaymentFlowData, PaymentOrderCreate, PaymentSyncV2,
+        PaymentVoidData, PaymentVoidV2, PaymentsAuthorizeData, PaymentsCaptureData,
         PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData, RefundSyncV2,
         RefundV2, RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, RequestDetails,
         ResponseId, SetupMandateRequestData, SetupMandateV2, SubmitEvidenceData, SubmitEvidenceV2,
@@ -87,6 +88,7 @@ impl PaymentCapture for Razorpay {}
 impl SetupMandateV2 for Razorpay {}
 impl AcceptDispute for Razorpay {}
 impl SubmitEvidenceV2 for Razorpay {}
+impl DisputeDefend for Razorpay {}
 
 impl Razorpay {
     pub const fn new() -> &'static Self {
@@ -767,6 +769,11 @@ impl ConnectorIntegrationV2<Accept, DisputeFlowData, AcceptDisputeData, DisputeR
 
 impl
     ConnectorIntegrationV2<SubmitEvidence, DisputeFlowData, SubmitEvidenceData, DisputeResponseData>
+    for Razorpay
+{
+}
+
+impl ConnectorIntegrationV2<DefendDispute, DisputeFlowData, DisputeDefendData, DisputeResponseData>
     for Razorpay
 {
 }

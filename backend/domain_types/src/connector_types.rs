@@ -1,5 +1,6 @@
 use crate::connector_flow::{
-    self, Accept, Authorize, Capture, PSync, RSync, Refund, SetupMandate, SubmitEvidence, Void,
+    self, Accept, Authorize, Capture, DefendDispute, PSync, RSync, Refund, SetupMandate,
+    SubmitEvidence, Void,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::{
@@ -68,12 +69,13 @@ pub trait ConnectorServiceTrait:
     + SetupMandateV2
     + AcceptDispute
     + RefundSyncV2
+    + DisputeDefend
+    + SubmitEvidenceV2
 {
 }
 
 pub trait PaymentVoidV2:
     ConnectorIntegrationV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>
-    + SubmitEvidenceV2
 {
 }
 
@@ -541,6 +543,7 @@ pub struct DisputeFlowData {
     pub dispute_id: Option<String>,
     pub connector_dispute_id: String,
     pub connectors: Connectors,
+    pub defense_reason_code: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -972,4 +975,16 @@ impl From<PaymentMethodData> for PaymentMethodDataType {
             },
         }
     }
+}
+
+pub trait DisputeDefend:
+    ConnectorIntegrationV2<DefendDispute, DisputeFlowData, DisputeDefendData, DisputeResponseData>
+{
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct DisputeDefendData {
+    pub dispute_id: String,
+    pub connector_dispute_id: String,
+    pub defense_reason_code: String,
 }
