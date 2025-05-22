@@ -49,6 +49,7 @@ AuthenticationType auth_type = 4;
   int64 minor_amount = 31;
   optional string merchant_order_reference_id = 32;
   optional int64 shipping_cost = 33;
+  optional bool all_keys_required = 34;
 }
 
 message PaymentsAuthorizeResponse {
@@ -61,11 +62,13 @@ message PaymentsAuthorizeResponse {
   AttemptStatus status = 8;
   optional string error_code = 9;
   optional string error_message = 10;
+  optional string raw_connector_response = 11;
 }
 
 message PaymentsSyncRequest {
   string resource_id = 1;
   optional string connector_request_reference_id = 2;
+  optional bool all_keys_required = 3;
 }
 
 message PaymentsSyncResponse {
@@ -76,6 +79,7 @@ message PaymentsSyncResponse {
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
+  optional string raw_connector_response = 11;
 }
 
 message RefundsSyncRequest {

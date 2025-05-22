@@ -956,6 +956,7 @@ impl
             connector_response_reference_id: Some(response.reference),
             incremental_authorization_allowed: None,
             mandate_reference: Box::new(None),
+            raw_connector_response: None,
         };
 
         Ok(Self {
@@ -1025,6 +1026,7 @@ pub fn get_adyen_response(
         connector_response_reference_id: Some(response.merchant_reference),
         incremental_authorization_allowed: None,
         mandate_reference: Box::new(mandate_reference),
+        raw_connector_response: None,
     };
     Ok((status, error, payments_response_data))
 }
@@ -1095,6 +1097,7 @@ pub fn get_redirection_response(
             .or(response.psp_reference),
         incremental_authorization_allowed: None,
         mandate_reference: Box::new(None),
+        raw_connector_response: None,
     };
     Ok((status, error, payments_response_data))
 }
@@ -1746,6 +1749,7 @@ impl<F, Req>
                 connector_response_reference_id: Some(response.reference),
                 incremental_authorization_allowed: None,
                 mandate_reference: Box::new(None),
+                raw_connector_response: None,
             }),
             resource_common_data: PaymentFlowData {
                 // From the docs, the only value returned is "received", outcome of refund is available
