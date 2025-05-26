@@ -622,6 +622,7 @@ impl
         let refunds_response_data = RefundsResponseData {
             connector_refund_id: response.id,
             refund_status: status,
+            raw_connector_response: None,
         };
 
         Ok(Self {
@@ -654,6 +655,7 @@ impl
         let refunds_response_data = RefundsResponseData {
             connector_refund_id: response.id,
             refund_status: status,
+            raw_connector_response: None,
         };
 
         Ok(Self {

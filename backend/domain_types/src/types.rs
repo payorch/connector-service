@@ -1,10 +1,11 @@
 use crate::connector_flow::{
-    Accept, Authorize, Capture, PSync, RSync, Refund, SetupMandate, SubmitEvidence, Void,
+    Accept, Authorize, Capture, DefendDispute, PSync, RSync, Refund, SetupMandate, SubmitEvidence,
+    Void,
 };
 use crate::connector_types::{
-    AcceptDisputeData, DisputeFlowData, DisputeResponseData, MultipleCaptureRequestData,
-    PaymentFlowData, PaymentVoidData, PaymentsAuthorizeData, PaymentsCaptureData,
-    PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
+    AcceptDisputeData, DisputeDefendData, DisputeFlowData, DisputeResponseData,
+    MultipleCaptureRequestData, PaymentFlowData, PaymentVoidData, PaymentsAuthorizeData,
+    PaymentsCaptureData, PaymentsResponseData, PaymentsSyncData, RefundFlowData, RefundSyncData,
     RefundWebhookDetailsResponse, RefundsData, RefundsResponseData, ResponseId,
     SetupMandateRequestData, SubmitEvidenceData, WebhookDetailsResponse,
 };
@@ -12,10 +13,10 @@ use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::utils::{ForeignFrom, ForeignTryFrom};
 use error_stack::{report, ResultExt};
 use grpc_api_types::payments::{
-    AcceptDisputeResponse, MandateReference, PaymentsAuthorizeRequest, PaymentsAuthorizeResponse,
-    PaymentsCaptureResponse, PaymentsSyncResponse, PaymentsVoidRequest, PaymentsVoidResponse,
-    RefundsResponse, RefundsSyncResponse, SetupMandateRequest, SetupMandateResponse,
-    SubmitEvidenceResponse,
+    AcceptDisputeResponse, DisputeDefendRequest, DisputeDefendResponse, MandateReference,
+    PaymentsAuthorizeRequest, PaymentsAuthorizeResponse, PaymentsCaptureResponse,
+    PaymentsSyncResponse, PaymentsVoidRequest, PaymentsVoidResponse, RefundsResponse,
+    RefundsSyncResponse, SetupMandateRequest, SetupMandateResponse, SubmitEvidenceResponse,
 };
 use hyperswitch_common_utils::id_type::CustomerId;
 use hyperswitch_common_utils::pii::Email;
@@ -24,6 +25,7 @@ use hyperswitch_domain_models::payment_address::PaymentAddress;
 use hyperswitch_domain_models::{
     payment_method_data::PaymentMethodData, router_data_v2::RouterDataV2,
 };
+use hyperswitch_interfaces::consts::NO_ERROR_CODE;
 use std::borrow::Cow;
 use std::{collections::HashMap, str::FromStr};
 
@@ -1144,6 +1146,10 @@ pub fn generate_payment_void_response(
                     connector_response_reference_id,
                     error_code: None,
                     error_message: None,
+                    raw_connector_response: router_data_v2
+                        .resource_common_data
+                        .raw_connector_response
+                        .clone(),
                 })
             }
             _ => Err(report!(ApplicationErrorResponse::InternalServerError(
@@ -1170,6 +1176,10 @@ pub fn generate_payment_void_response(
                 status: status as i32,
                 error_message: Some(e.message),
                 error_code: Some(e.code),
+                raw_connector_response: router_data_v2
+                    .resource_common_data
+                    .raw_connector_response
+                    .clone(),
             })
         }
     }
@@ -1261,6 +1271,7 @@ impl ForeignTryFrom<grpc_api_types::payments::RefundsSyncRequest> for RefundSync
             reason: value.refund_reason.clone(),
             refund_status: hyperswitch_common_enums::RefundStatus::Pending,
             refund_connector_metadata: None,
+            all_keys_required: value.all_keys_required,
         })
     }
 }
@@ -1275,6 +1286,7 @@ impl ForeignTryFrom<(grpc_api_types::payments::RefundsSyncRequest, Connectors)> 
             status: hyperswitch_common_enums::RefundStatus::Pending,
             refund_id: None,
             connectors,
+            raw_connector_response: None,
         })
     }
 }
@@ -1289,6 +1301,7 @@ impl ForeignTryFrom<(grpc_api_types::payments::RefundsRequest, Connectors)> for 
             status: hyperswitch_common_enums::RefundStatus::Pending,
             refund_id: Some(value.refund_id),
             connectors,
+            raw_connector_response: None,
         })
     }
 }
@@ -1353,6 +1366,8 @@ impl ForeignTryFrom<(grpc_api_types::payments::AcceptDisputeRequest, Connectors)
             dispute_id: None,
             connectors,
             connector_dispute_id: value.connector_dispute_id,
+            defense_reason_code: None,
+            raw_connector_response: None,
         })
     }
 }
@@ -1409,6 +1424,8 @@ impl ForeignTryFrom<(grpc_api_types::payments::SubmitEvidenceRequest, Connectors
             dispute_id: None,
             connectors,
             connector_dispute_id: value.connector_dispute_id,
+            defense_reason_code: None,
+            raw_connector_response: None,
         })
     }
 }
@@ -1429,6 +1446,10 @@ pub fn generate_refund_sync_response(
                 connector_response_reference_id: Some(response.connector_refund_id.clone()),
                 error_code: None,
                 error_message: None,
+                raw_connector_response: router_data_v2
+                    .resource_common_data
+                    .raw_connector_response
+                    .clone(),
             })
         }
         Err(e) => {
@@ -1443,6 +1464,10 @@ pub fn generate_refund_sync_response(
                 connector_response_reference_id: e.connector_transaction_id,
                 error_code: Some(e.message),
                 error_message: Some(e.code),
+                raw_connector_response: router_data_v2
+                    .resource_common_data
+                    .raw_connector_response
+                    .clone(),
             })
         }
     }
@@ -1481,6 +1506,7 @@ impl ForeignTryFrom<PaymentsVoidRequest> for PaymentVoidData {
         Ok(Self {
             connector_transaction_id: value.connector_request_reference_id,
             cancellation_reason: value.cancellation_reason,
+            raw_connector_response: None,
         })
     }
 }
@@ -1499,6 +1525,7 @@ impl ForeignTryFrom<RefundWebhookDetailsResponse> for RefundsSyncResponse {
             connector_response_reference_id: value.connector_response_reference_id,
             error_code: value.error_code,
             error_message: value.error_message,
+            raw_connector_response: None,
         })
     }
 }
@@ -1623,6 +1650,7 @@ pub fn generate_refund_response(
                 refund_status: grpc_status as i32,
                 error_message: None,
                 error_code: None,
+                raw_connector_response: response.raw_connector_response,
             })
         }
         Err(e) => {
@@ -1636,6 +1664,7 @@ pub fn generate_refund_response(
                 refund_status: status as i32,
                 error_message: Some(e.message),
                 error_code: Some(e.code),
+                raw_connector_response: None,
             })
         }
     }
@@ -1744,6 +1773,7 @@ pub fn generate_payment_capture_response(
                     error_code: None,
                     error_message: None,
                     status: grpc_status.into(),
+                    raw_connector_response: None,
                 })
             }
             _ => Err(report!(ApplicationErrorResponse::InternalServerError(
@@ -1770,6 +1800,7 @@ pub fn generate_payment_capture_response(
                 status: status.into(),
                 error_message: Some(e.message),
                 error_code: Some(e.code),
+                raw_connector_response: None,
             })
         }
     }
@@ -2074,4 +2105,64 @@ pub fn generate_setup_mandate_response(
         }
     };
     Ok(response)
+}
+
+impl ForeignTryFrom<(DisputeDefendRequest, Connectors)> for DisputeFlowData {
+    type Error = ApplicationErrorResponse;
+
+    fn foreign_try_from(
+        (value, connectors): (DisputeDefendRequest, Connectors),
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        Ok(DisputeFlowData {
+            dispute_id: Some(value.connector_dispute_id.clone()),
+            connectors,
+            connector_dispute_id: value.connector_dispute_id,
+            defense_reason_code: Some(value.defense_reason_code),
+            raw_connector_response: None,
+        })
+    }
+}
+
+impl ForeignTryFrom<DisputeDefendRequest> for DisputeDefendData {
+    type Error = ApplicationErrorResponse;
+    fn foreign_try_from(
+        value: DisputeDefendRequest,
+    ) -> Result<Self, error_stack::Report<Self::Error>> {
+        let connector_dispute_id = value.connector_dispute_id;
+        Ok(Self {
+            dispute_id: connector_dispute_id.clone(),
+            connector_dispute_id,
+            defense_reason_code: value.defense_reason_code,
+        })
+    }
+}
+
+pub fn generate_defend_dispute_response(
+    router_data_v2: RouterDataV2<
+        DefendDispute,
+        DisputeFlowData,
+        DisputeDefendData,
+        DisputeResponseData,
+    >,
+) -> Result<DisputeDefendResponse, error_stack::Report<ApplicationErrorResponse>> {
+    let defend_dispute_response = router_data_v2.response;
+
+    match defend_dispute_response {
+        Ok(response) => Ok(DisputeDefendResponse {
+            dispute_status: response.dispute_status as i32,
+            connector_dispute_id: response.connector_dispute_id,
+            error_message: None,
+            error_code: None,
+            raw_connector_response: None,
+        }),
+        Err(e) => Ok(DisputeDefendResponse {
+            dispute_status: hyperswitch_common_enums::DisputeStatus::DisputeLost as i32,
+            connector_dispute_id: e
+                .connector_transaction_id
+                .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+            error_message: Some(e.message),
+            error_code: Some(e.code),
+            raw_connector_response: None,
+        }),
+    }
 }

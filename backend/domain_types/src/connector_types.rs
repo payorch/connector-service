@@ -1,5 +1,6 @@
 use crate::connector_flow::{
-    self, Accept, Authorize, Capture, PSync, RSync, Refund, SetupMandate, SubmitEvidence, Void,
+    self, Accept, Authorize, Capture, DefendDispute, PSync, RSync, Refund, SetupMandate,
+    SubmitEvidence, Void,
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::Connectors;
@@ -58,12 +59,13 @@ pub trait ConnectorServiceTrait:
     + SetupMandateV2
     + AcceptDispute
     + RefundSyncV2
+    + DisputeDefend
+    + SubmitEvidenceV2
 {
 }
 
 pub trait PaymentVoidV2:
     ConnectorIntegrationV2<Void, PaymentFlowData, PaymentVoidData, PaymentsResponseData>
-    + SubmitEvidenceV2
 {
 }
 
@@ -172,6 +174,7 @@ impl RawConnectorResponse for PaymentFlowData {
 pub struct PaymentVoidData {
     pub connector_transaction_id: String,
     pub cancellation_reason: Option<String>,
+    pub raw_connector_response: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -301,12 +304,14 @@ pub struct RefundSyncData {
     pub reason: Option<String>,
     pub refund_connector_metadata: Option<hyperswitch_common_utils::pii::SecretSerdeValue>,
     pub refund_status: hyperswitch_common_enums::RefundStatus,
+    pub all_keys_required: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
 pub struct RefundsResponseData {
     pub connector_refund_id: String,
     pub refund_status: hyperswitch_common_enums::RefundStatus,
+    pub raw_connector_response: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -314,10 +319,13 @@ pub struct RefundFlowData {
     pub status: hyperswitch_common_enums::RefundStatus,
     pub refund_id: Option<String>,
     pub connectors: Connectors,
+    pub raw_connector_response: Option<String>,
 }
 
 impl RawConnectorResponse for RefundFlowData {
-    fn set_raw_connector_response(&mut self, _response: Option<String>) {}
+    fn set_raw_connector_response(&mut self, response: Option<String>) {
+        self.raw_connector_response = response;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -550,10 +558,14 @@ pub struct DisputeFlowData {
     pub dispute_id: Option<String>,
     pub connector_dispute_id: String,
     pub connectors: Connectors,
+    pub defense_reason_code: Option<String>,
+    pub raw_connector_response: Option<String>,
 }
 
 impl RawConnectorResponse for DisputeFlowData {
-    fn set_raw_connector_response(&mut self, _response: Option<String>) {}
+    fn set_raw_connector_response(&mut self, response: Option<String>) {
+        self.raw_connector_response = response;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -561,6 +573,7 @@ pub struct DisputeResponseData {
     pub connector_dispute_id: String,
     pub dispute_status: DisputeStatus,
     pub connector_dispute_status: Option<String>,
+    pub raw_connector_response: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -624,4 +637,16 @@ pub struct SubmitEvidenceData {
     pub uncategorized_file_type: Option<String>,
     pub uncategorized_file_provider_file_id: Option<String>,
     pub uncategorized_text: Option<String>,
+}
+
+pub trait DisputeDefend:
+    ConnectorIntegrationV2<DefendDispute, DisputeFlowData, DisputeDefendData, DisputeResponseData>
+{
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct DisputeDefendData {
+    pub dispute_id: String,
+    pub connector_dispute_id: String,
+    pub defense_reason_code: String,
 }

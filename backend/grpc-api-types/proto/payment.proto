@@ -13,6 +13,31 @@ service PaymentService {
   rpc SetupMandate(SetupMandateRequest) returns (SetupMandateResponse);
   rpc AcceptDispute(AcceptDisputeRequest) returns (AcceptDisputeResponse);
   rpc SubmitEvidence (SubmitEvidenceRequest) returns (SubmitEvidenceResponse);
+  rpc DefendDispute(DisputeDefendRequest) returns (DisputeDefendResponse);
+}
+
+message DisputeDefendRequest {
+  string defense_reason_code = 1;
+  string connector_dispute_id =3;
+  optional bool all_keys_required = 34;
+}
+
+message DisputeDefendResponse {
+  DisputeStatus dispute_status = 1;
+  string connector_dispute_id = 2;
+  optional string error_code = 3;
+  optional string error_message = 4;
+  optional string raw_connector_response = 11;
+}
+
+enum DisputeStatus {
+  DISPUTE_OPENED = 0;
+  DISPUTE_EXPIRED = 1;
+  DISPUTE_ACCEPTED = 2;
+  DISPUTE_CANCELLED = 3;
+  DISPUTE_CHALLENGED = 4;
+  DISPUTE_WON = 5;
+  DISPUTE_LOST = 6;
 }
 
 message PaymentsAuthorizeRequest {
@@ -86,6 +111,7 @@ message RefundsSyncRequest {
   string connector_refund_id = 2;
   string connector_transaction_id = 1;
   optional string refund_reason = 3;
+  optional bool all_keys_required = 4;
 }
 
 message RefundsSyncResponse {
@@ -94,11 +120,13 @@ message RefundsSyncResponse {
   optional string connector_response_reference_id = 5;
   optional string error_code = 9;
   optional string error_message = 10;
+  optional string raw_connector_response = 11;
 }
 
 message PaymentsVoidRequest {
   string connector_request_reference_id = 2;
   optional string cancellation_reason = 1;
+  optional bool all_keys_required = 3;
 }
 
 message PaymentsVoidResponse {
@@ -107,6 +135,7 @@ message PaymentsVoidResponse {
   AttemptStatus status = 8;
   optional string error_code = 4;
   optional string error_message = 5;
+  optional string raw_connector_response = 11;
 }
 
 message IncomingWebhookRequest {
@@ -208,6 +237,7 @@ message RefundsRequest {
   int64 minor_refund_amount = 11;
   optional string merchant_account_id = 12;
   optional CaptureMethod capture_method = 16;
+  optional bool all_keys_required = 17;
 }
 
 message RefundsResponse {
@@ -215,6 +245,7 @@ message RefundsResponse {
   RefundStatus refund_status = 36;
   optional string error_code = 2;
   optional string error_message = 3;
+  optional string raw_connector_response = 4;
 }
 
 enum Connector {
@@ -1054,6 +1085,7 @@ message PaymentsCaptureRequest {
   Currency currency = 15;
   optional MultipleCaptureRequestData multiple_capture_data = 21;
   optional bytes connector_meta_data = 3;
+  optional bool all_keys_required = 4;
 }
 
 
@@ -1063,6 +1095,7 @@ message PaymentsCaptureResponse {
   AttemptStatus status = 8;
   optional string error_code = 3;
   optional string error_message = 4;
+  optional string raw_connector_response = 5;
 }
 
 message AcceptDisputeRequest {
@@ -1076,16 +1109,6 @@ message AcceptDisputeResponse {
   optional string connector_dispute_status = 3;
   optional string error_code = 4;
   optional string error_message = 5;
-}
-
-enum DisputeStatus {
-  DisputeOpened=0;
-    DisputeExpired=1;
-    DisputeAccepted=2;
-    DisputeCancelled=3;
-    DisputeChallenged=4;
-    DisputeWon=5;
-    DisputeLost=6;
 }
 
 message SubmitEvidenceRequest {
