@@ -4,7 +4,8 @@ use crate::connector_flow::{
 };
 use crate::errors::{ApiError, ApplicationErrorResponse};
 use crate::types::{
-    ConnectorInfo, Connectors, PaymentMethodDataType, PaymentMethodDetails, SupportedPaymentMethods,
+    ConnectorInfo, Connectors, PaymentMethodDataType, PaymentMethodDetails,
+    PaymentMethodTypeMetadata, SupportedPaymentMethods,
 };
 use crate::utils::ForeignTryFrom;
 use error_stack::ResultExt;
@@ -987,4 +988,31 @@ pub struct DisputeDefendData {
     pub dispute_id: String,
     pub connector_dispute_id: String,
     pub defense_reason_code: String,
+}
+
+pub trait SupportedPaymentMethodsExt {
+    fn add(
+        &mut self,
+        payment_method: PaymentMethod,
+        payment_method_type: PaymentMethodType,
+        payment_method_details: PaymentMethodDetails,
+    );
+}
+
+impl SupportedPaymentMethodsExt for SupportedPaymentMethods {
+    fn add(
+        &mut self,
+        payment_method: PaymentMethod,
+        payment_method_type: PaymentMethodType,
+        payment_method_details: PaymentMethodDetails,
+    ) {
+        if let Some(payment_method_data) = self.get_mut(&payment_method) {
+            payment_method_data.insert(payment_method_type, payment_method_details);
+        } else {
+            let mut payment_method_type_metadata = PaymentMethodTypeMetadata::new();
+            payment_method_type_metadata.insert(payment_method_type, payment_method_details);
+
+            self.insert(payment_method, payment_method_type_metadata);
+        }
+    }
 }

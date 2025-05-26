@@ -2,10 +2,10 @@ mod test;
 pub mod transformers;
 use crate::types::ResponseRouterData;
 use crate::with_error_response_body;
-use domain_types::connector_types::ConnectorValidation;
 use domain_types::{
     capture_method_not_supported,
     connector_types::{is_mandate_supported, ConnectorSpecifications},
+    connector_types::{ConnectorValidation, SupportedPaymentMethodsExt},
     payment_method_not_supported,
     types::{
         self, CardSpecificFeatures, ConnectorInfo, FeatureStatus, PaymentMethodDataType,
@@ -574,43 +574,35 @@ static ADYEN_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> = Lazy
 
     let mut adyen_supported_payment_methods = SupportedPaymentMethods::new();
 
-    adyen_supported_payment_methods
-        .entry(PaymentMethod::Card)
-        .or_default()
-        .insert(
-            PaymentMethodType::Credit,
-            PaymentMethodDetails {
-                mandates: FeatureStatus::Supported,
-                refunds: FeatureStatus::Supported,
-                supported_capture_methods: adyen_supported_capture_methods.clone(),
-                specific_features: Some(PaymentMethodSpecificFeatures::Card(
-                    CardSpecificFeatures {
-                        three_ds: FeatureStatus::Supported,
-                        no_three_ds: FeatureStatus::Supported,
-                        supported_card_networks: adyen_supported_card_network.clone(),
-                    },
-                )),
-            },
-        );
+    adyen_supported_payment_methods.add(
+        PaymentMethod::Card,
+        PaymentMethodType::Credit,
+        PaymentMethodDetails {
+            mandates: FeatureStatus::Supported,
+            refunds: FeatureStatus::Supported,
+            supported_capture_methods: adyen_supported_capture_methods.clone(),
+            specific_features: Some(PaymentMethodSpecificFeatures::Card(CardSpecificFeatures {
+                three_ds: FeatureStatus::Supported,
+                no_three_ds: FeatureStatus::Supported,
+                supported_card_networks: adyen_supported_card_network.clone(),
+            })),
+        },
+    );
 
-    adyen_supported_payment_methods
-        .entry(PaymentMethod::Card)
-        .or_default()
-        .insert(
-            PaymentMethodType::Debit,
-            PaymentMethodDetails {
-                mandates: FeatureStatus::Supported,
-                refunds: FeatureStatus::Supported,
-                supported_capture_methods: adyen_supported_capture_methods.clone(),
-                specific_features: Some(PaymentMethodSpecificFeatures::Card(
-                    CardSpecificFeatures {
-                        three_ds: FeatureStatus::Supported,
-                        no_three_ds: FeatureStatus::Supported,
-                        supported_card_networks: adyen_supported_card_network.clone(),
-                    },
-                )),
-            },
-        );
+    adyen_supported_payment_methods.add(
+        PaymentMethod::Card,
+        PaymentMethodType::Debit,
+        PaymentMethodDetails {
+            mandates: FeatureStatus::Supported,
+            refunds: FeatureStatus::Supported,
+            supported_capture_methods: adyen_supported_capture_methods.clone(),
+            specific_features: Some(PaymentMethodSpecificFeatures::Card(CardSpecificFeatures {
+                three_ds: FeatureStatus::Supported,
+                no_three_ds: FeatureStatus::Supported,
+                supported_card_networks: adyen_supported_card_network.clone(),
+            })),
+        },
+    );
 
     adyen_supported_payment_methods
 });

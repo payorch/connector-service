@@ -7,7 +7,10 @@ use domain_types::{
         Accept, Authorize, Capture, CreateOrder, DefendDispute, PSync, RSync, Refund, SetupMandate,
         SubmitEvidence, Void,
     },
-    connector_types::{is_mandate_supported, ConnectorSpecifications, ConnectorValidation},
+    connector_types::{
+        is_mandate_supported, ConnectorSpecifications, ConnectorValidation,
+        SupportedPaymentMethodsExt,
+    },
     connector_types::{
         AcceptDispute, AcceptDisputeData, ConnectorServiceTrait, ConnectorWebhookSecrets,
         DisputeDefend, DisputeDefendData, DisputeFlowData, DisputeResponseData, EventType,
@@ -869,43 +872,39 @@ static RAZORPAY_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> =
 
         let mut razorpay_supported_payment_methods = SupportedPaymentMethods::new();
 
-        razorpay_supported_payment_methods
-            .entry(PaymentMethod::Card)
-            .or_default()
-            .insert(
-                PaymentMethodType::Debit,
-                PaymentMethodDetails {
-                    mandates: FeatureStatus::NotSupported,
-                    refunds: FeatureStatus::Supported,
-                    supported_capture_methods: razorpay_supported_capture_methods.clone(),
-                    specific_features: Some(PaymentMethodSpecificFeatures::Card(
-                        CardSpecificFeatures {
-                            three_ds: FeatureStatus::NotSupported,
-                            no_three_ds: FeatureStatus::Supported,
-                            supported_card_networks: razorpay_supported_card_network.clone(),
-                        },
-                    )),
-                },
-            );
+        razorpay_supported_payment_methods.add(
+            PaymentMethod::Card,
+            PaymentMethodType::Debit,
+            PaymentMethodDetails {
+                mandates: FeatureStatus::NotSupported,
+                refunds: FeatureStatus::Supported,
+                supported_capture_methods: razorpay_supported_capture_methods.clone(),
+                specific_features: Some(PaymentMethodSpecificFeatures::Card(
+                    CardSpecificFeatures {
+                        three_ds: FeatureStatus::NotSupported,
+                        no_three_ds: FeatureStatus::Supported,
+                        supported_card_networks: razorpay_supported_card_network.clone(),
+                    },
+                )),
+            },
+        );
 
-        razorpay_supported_payment_methods
-            .entry(PaymentMethod::Card)
-            .or_default()
-            .insert(
-                PaymentMethodType::Credit,
-                PaymentMethodDetails {
-                    mandates: FeatureStatus::NotSupported,
-                    refunds: FeatureStatus::Supported,
-                    supported_capture_methods: razorpay_supported_capture_methods.clone(),
-                    specific_features: Some(PaymentMethodSpecificFeatures::Card(
-                        CardSpecificFeatures {
-                            three_ds: FeatureStatus::NotSupported,
-                            no_three_ds: FeatureStatus::Supported,
-                            supported_card_networks: razorpay_supported_card_network.clone(),
-                        },
-                    )),
-                },
-            );
+        razorpay_supported_payment_methods.add(
+            PaymentMethod::Card,
+            PaymentMethodType::Credit,
+            PaymentMethodDetails {
+                mandates: FeatureStatus::NotSupported,
+                refunds: FeatureStatus::Supported,
+                supported_capture_methods: razorpay_supported_capture_methods.clone(),
+                specific_features: Some(PaymentMethodSpecificFeatures::Card(
+                    CardSpecificFeatures {
+                        three_ds: FeatureStatus::NotSupported,
+                        no_three_ds: FeatureStatus::Supported,
+                        supported_card_networks: razorpay_supported_card_network.clone(),
+                    },
+                )),
+            },
+        );
 
         razorpay_supported_payment_methods
     });
